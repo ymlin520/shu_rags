@@ -1,0 +1,1 @@
+"""Local FAQ search backend."""
