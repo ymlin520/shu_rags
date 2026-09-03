@@ -86,6 +86,7 @@ class MailSettingsRequest(BaseModel):
     from_name: str = Field(default="校務 FAQ 工單系統", max_length=100)
     password: str = Field(default="", max_length=200)
     offices: dict[str, str] = Field(default_factory=dict)
+    student_recipients: list[str] = Field(default_factory=list, max_length=20)
 
 
 class MailTestRequest(BaseModel):

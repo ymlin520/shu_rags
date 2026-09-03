@@ -11,7 +11,8 @@ from .config import PROJECT_ROOT
 DEFAULT_EMAIL = os.getenv("FAQ_DEFAULT_EMAIL", "admin@example.edu.tw")
 OFFICES = ["教務處註冊組", "教務處課務組", "學務處生活輔導組", "學務處住宿服務組", "國際處",
            "總務處", "資訊處", "圖資處", "系辦公室", "其他行政單位"]
-DEFAULT_SETTINGS = {"server": "smtp.gmail.com", "port": 587, "username": "", "from_name": "校務 FAQ 工單系統"}
+DEFAULT_SETTINGS = {"server": "smtp.gmail.com", "port": 587, "username": "", "from_name": "校務 FAQ 工單系統",
+                    "student_recipients": [DEFAULT_EMAIL]}
 SETTINGS_FILE = PROJECT_ROOT / "mail-settings.json"
 OFFICE_FILE = PROJECT_ROOT / "office-emails.json"
 PASSWORD_FILE = PROJECT_ROOT / "mail-app-password.txt"
@@ -32,13 +33,25 @@ def _write_json(path: Path, data: dict) -> None:
 
 
 def load_settings() -> dict:
-    return {**DEFAULT_SETTINGS, **_json(SETTINGS_FILE, {})}
+    settings = {**DEFAULT_SETTINGS, **_json(SETTINGS_FILE, {})}
+    saved = settings.get("student_recipients")
+    if not isinstance(saved, list):
+        saved = [saved] if saved else []
+    settings["student_recipients"] = list(dict.fromkeys(
+        str(address).strip().lower() for address in saved if str(address).strip()
+    )) or [DEFAULT_EMAIL]
+    return settings
 
 
 def save_settings(data: dict) -> dict:
     settings = load_settings()
     settings.update({k: v for k, v in data.items() if k in DEFAULT_SETTINGS and v not in (None, "")})
     settings["port"] = int(settings.get("port") or 587)
+    recipients = settings.get("student_recipients")
+    if isinstance(recipients, list):
+        settings["student_recipients"] = list(dict.fromkeys(
+            str(address).strip().lower() for address in recipients if str(address).strip()
+        )) or [DEFAULT_EMAIL]
     _write_json(SETTINGS_FILE, settings)
     return settings
 
@@ -98,6 +111,7 @@ def mail_status() -> dict:
         "from_name": settings.get("from_name", DEFAULT_SETTINGS["from_name"]),
         "password_set": bool(_password()),
         "default_email": DEFAULT_EMAIL,
+        "student_recipients": settings.get("student_recipients", [DEFAULT_EMAIL]),
         "base_url": base_url(),
         "offices": load_office_emails(),
     }
@@ -197,8 +211,9 @@ def send_student_resolution_email(ticket: dict) -> tuple[bool, str]:
     settings = load_settings()
     if not (GOOGLE_CLIENT_FILE.exists() and GOOGLE_TOKEN_FILE.exists()) and (not settings.get("username") or not _password()):
         return False, "尚未設定寄件帳號或應用程式密碼"
-    # 單機測試版固定寄至測試信箱；未來串接會員系統後再改用學生帳號信箱。
-    recipient = DEFAULT_EMAIL
+    # 單機測試版寄至管理後台設定的通知清單；未來串接會員系統後再改用學生帳號信箱。
+    recipients = settings.get("student_recipients") or [DEFAULT_EMAIL]
+    recipient = ", ".join(recipients)
     access_key = str(ticket.get("access_key") or "").strip()
     if not access_key:
         return False, "工單缺少學生存取碼"

@@ -186,6 +186,14 @@ def email_settings_save(request: MailSettingsRequest, x_admin_token: str = Heade
     data = request.model_dump()
     password = data.pop("password", "")
     offices = data.pop("offices", {})
+    recipients = []
+    for email in data.get("student_recipients", []):
+        email = email.strip().lower()
+        if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
+            raise HTTPException(status_code=422, detail=f"學生通知信箱格式不正確：{email or '空白'}")
+        if email not in recipients:
+            recipients.append(email)
+    data["student_recipients"] = recipients or [mail_status()["default_email"]]
     save_settings(data)
     if password.strip():
         save_password(password)
