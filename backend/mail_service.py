@@ -235,7 +235,7 @@ def send_student_resolution_email(ticket: dict) -> tuple[bool, str]:
     safe_q = escape(question).replace(chr(10), "<br>")
     safe_a = escape(answer).replace(chr(10), "<br>")
     star_links = " ".join(
-        f'<a href="{ticket_link}&rating={n}#rate-card" style="font-size:28px;color:#e6532d;text-decoration:none" title="{n} 顆星">{chr(9733) * n}</a>'
+        f'<a href="{ticket_link}&rating={n}#rate-card" style="font-size:28px;color:#e6532d;text-decoration:none" title="評分 {n} 顆星">{chr(9733)}</a>'
         for n in range(1, 6)
     )
     message.add_alternative(
