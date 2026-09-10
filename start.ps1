@@ -1,23 +1,23 @@
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
-if (-not (Test-Path '.\.venv\Scripts\python.exe')) { throw 'å°šæœªå®‰è£ï¼Œè«‹å…ˆåŸ·è¡Œ .\setup.ps1' }
-if (-not (Test-Path '.\admin-token.txt')) { throw 'ç¼ºå°‘æœ¬æ©Ÿå¯†ç¢¼ï¼Œè«‹å…ˆåŸ·è¡Œ .\setup.ps1' }
+if (-not (Test-Path '.\.venv\Scripts\python.exe')) { throw '©|¥¼¦w¸Ë¡A½Ğ¥ı°õ¦æ .\setup.ps1' }
+if (-not (Test-Path '.\admin-token.txt')) { throw '¯Ê¤Ö¥»¾÷±K½X¡A½Ğ¥ı°õ¦æ .\setup.ps1' }
 $env:FAQ_ADMIN_TOKEN = (Get-Content -Raw '.\admin-token.txt').Trim()
 if (Test-Path '.\default-email.txt') { $env:FAQ_DEFAULT_EMAIL = (Get-Content -Raw '.\default-email.txt').Trim() }
 $ollama = Join-Path $env:LOCALAPPDATA 'Programs\Ollama\ollama.exe'
 try { Invoke-RestMethod 'http://127.0.0.1:11434/api/version' -TimeoutSec 3 | Out-Null }
 catch {
-  if (-not (Test-Path $ollama)) { throw 'æ‰¾ä¸åˆ° Ollamaï¼Œè«‹å…ˆå®‰è£ã€‚' }
+  if (-not (Test-Path $ollama)) { throw '§ä¤£¨ì Ollama¡A½Ğ¥ı¦w¸Ë¡C' }
   Start-Process -FilePath $ollama -ArgumentList 'serve' -WindowStyle Hidden
   Start-Sleep -Seconds 4
 }
 if (-not (Test-Path '.\data\qdrant-local\collection\school_faq\storage.sqlite')) {
   & '.\.venv\Scripts\python.exe' '.\scripts\import_faq.py'
-  if ($LASTEXITCODE -ne 0) { throw 'FAQ é¦–æ¬¡åŒ¯å…¥å¤±æ•—ã€‚' }
+  if ($LASTEXITCODE -ne 0) { throw 'FAQ ­º¦¸¶×¤J¥¢±Ñ¡C' }
 }
 $existing = Get-NetTCPConnection -LocalPort 8001 -State Listen -ErrorAction SilentlyContinue
 if (-not $existing) {
-  $proc = Start-Process '.\.venv\Scripts\python.exe' -ArgumentList '-m','uvicorn','backend.main:app','--host','0.0.0.0','--port','8001' -WorkingDirectory $PSScriptRoot -WindowStyle Hidden -RedirectStandardOutput '.\server.out.log' -RedirectStandardError '.\server.err.log' -PassThru
+  $proc = Start-Process '.\.venv\Scripts\python.exe' -ArgumentList '-m','uvicorn','backend.main:app','--host','127.0.0.1','--port','8001' -WorkingDirectory $PSScriptRoot -WindowStyle Hidden -RedirectStandardOutput '.\server.out.log' -RedirectStandardError '.\server.err.log' -PassThru
   Set-Content '.\backend.pid' $proc.Id -Encoding ascii
 }
 $ready = $false
@@ -25,6 +25,6 @@ foreach ($attempt in 1..60) {
   try { $health = Invoke-RestMethod 'http://127.0.0.1:8001/api/health' -TimeoutSec 10; $ready = $true; break }
   catch { Start-Sleep -Seconds 2 }
 }
-if (-not $ready) { throw 'æœå‹™æœªèƒ½å•Ÿå‹•ï¼Œè«‹æŸ¥çœ‹ server.err.logã€‚' }
-Write-Host "æœå‹™å·²å•Ÿå‹•ï¼šhttp://127.0.0.1:8001ï¼ˆFAQ $($health.points) ç­†ï¼‰"
+if (-not $ready) { throw 'ªA°È¥¼¯à±Ò°Ê¡A½Ğ¬d¬İ server.err.log¡C' }
+Write-Host "ªA°È¤w±Ò°Ê¡Ghttp://127.0.0.1:8001¡]FAQ $($health.points) µ§¡^"
 Start-Process 'http://127.0.0.1:8001'

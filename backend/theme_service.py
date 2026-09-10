@@ -367,8 +367,9 @@ def build_css(cfg: dict = None) -> str:
         ".category.active{border-color:%s;background:%s;color:%s;}" % (t["accent"], t["accent_soft"], t["accent"]),
         ".message,.answer-card{background:%s;color:%s;border-color:%s;}" % (t["message_bg"], t["message_text"], t["line"]),
         ".user-message{background:%s;border-color:%s;}" % (t["user_msg_bg"], t["accent"]),
-        ".user-avatar{background:%s;border-color:%s;}" % (t["accent"], t["accent"]),
         ".avatar{background:%s;border-color:%s;}" % (t["paper"], t["line"]),
+        # .user-avatar 必須排在 .avatar 之後，否則會被同權重的 .avatar 蓋掉
+        ".avatar.user-avatar{background:%s;border-color:%s;color:#fff;}" % (t["accent"], t["accent"]),
         ".ai-answer{background:%s;border-color:%s;}" % (t["message_bg"], t["accent"]),
         ".answer-topline{color:%s;}" % t["accent"],
         ".composer-wrap{background:%s;}" % t["composer_bg"],

@@ -1,1 +1,29 @@
 .admin-open{text-decoration:none;border:2px solid #2d2a27;border-radius:11px;padding:10px 15px;color:#292724;font-weight:700;background:#fff}.ticket-callout{border:2px solid #e6532d;background:#f7ddd1;border-radius:16px;padding:16px 18px;display:flex;align-items:center;justify-content:space-between;gap:18px}.ticket-callout p{margin:4px 0 0;color:#74483b;font-size:13px}.ticket-callout button,.inline-ticket,.dialog-actions .primary,.ticket-success button{border:0;border-radius:10px;background:#e6532d;color:#fff;font-weight:800;padding:11px 15px;cursor:pointer}.ticket-dialog{width:min(680px,calc(100% - 28px));border:2px solid #2d2a27;border-radius:18px;padding:0;background:#fbf8f3}.ticket-dialog::backdrop{background:#25211d99}.ticket-dialog form{padding:25px}.ticket-dialog label{display:grid;gap:6px;font-weight:700;font-size:13px;margin-top:13px}.ticket-dialog input,.ticket-dialog select,.ticket-dialog textarea{width:100%;border:1.5px solid #aaa198;border-radius:9px;background:#fff;padding:11px;font:15px inherit}.ticket-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.dialog-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}.dialog-actions button{border:1px solid #2d2a27;border-radius:10px;background:#fff;padding:10px 18px}.ticket-success{text-align:center;padding:35px}.ticket-success span{display:grid;place-items:center;margin:auto;width:58px;height:58px;border-radius:50%;background:#e6532d;color:#fff;font-size:30px}.ticket-success strong{display:inline-block;font-size:22px;border:1px dashed #2d2a27;padding:9px 16px;border-radius:9px}@media(max-width:600px){.ticket-grid{grid-template-columns:1fr}.ticket-callout{align-items:flex-start;flex-direction:column}.admin-open{font-size:12px;padding:8px}}
+
+/* ===== 需求單視窗：補上原本缺少的標題列樣式 ===== */
+.ticket-dialog{max-height:calc(100vh - 40px);overflow-y:auto;overscroll-behavior:contain}
+.ticket-dialog .admin-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
+.ticket-dialog .admin-heading small{display:block;color:#b5482a;font-size:12px;font-weight:800;letter-spacing:.08em}
+.ticket-dialog .admin-heading h2{margin:5px 0 0;font-size:21px;line-height:1.3}
+.ticket-dialog .admin-heading>button{flex:0 0 auto;width:38px;height:38px;border:1.5px solid #2d2a27;border-radius:10px;background:#fff;color:#292724;font:19px/1 inherit;cursor:pointer}
+.ticket-dialog .ticket-intro{margin:11px 0 2px;color:#6b655f;font-size:13px;line-height:1.65}
+.ticket-dialog #ticket-status,.ticket-dialog #email-status{margin:12px 0 0;color:#b5482a;font-size:12px;line-height:1.5}
+.ticket-dialog #ticket-status:empty,.ticket-dialog #email-status:empty{margin:0}
+
+
+
+/* ===== 手機：需求單視窗改成底部彈出面板 ===== */
+@media(max-width:600px){
+  .ticket-dialog{width:100%;max-width:100%;margin:auto auto 0;border-bottom:0;border-radius:18px 18px 0 0;max-height:92vh;max-height:92dvh}
+  .ticket-dialog form{padding:18px 15px calc(18px + env(safe-area-inset-bottom))}
+  .ticket-dialog .admin-heading h2{font-size:19px}
+  .ticket-dialog label{margin-top:12px;font-size:13px}
+  .ticket-dialog input,.ticket-dialog select,.ticket-dialog textarea{padding:12px;font-size:16px;border-radius:10px}
+  .ticket-dialog textarea{min-height:96px}
+  .dialog-actions{flex-direction:column-reverse;gap:9px;margin-top:18px}
+  .dialog-actions button{width:100%;padding:13px;font-size:15px}
+  .ticket-callout{padding:14px 15px;gap:12px}
+  .ticket-callout button,.inline-ticket{width:100%;padding:12px}
+  .ticket-success{padding:26px 16px}
+  .ticket-success strong{font-size:18px}
+}
