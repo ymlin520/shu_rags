@@ -52,6 +52,8 @@ tr.skip{background:#faf6f3;color:#9a938a}
 #rows .q{font-weight:700}
 #rows .a{display:block;color:#77716a;max-height:40px;overflow:hidden;margin-top:3px}
 #rows .id{font-family:ui-monospace,Consolas,monospace;font-size:13px}
+#rows .when{white-space:nowrap;font-size:13px;color:#77716a}
+#rows .note{font-size:13px;color:#77716a;min-width:150px;max-width:240px}
 .edit{border:0;background:transparent;color:var(--accent);font-weight:700;cursor:pointer;font:inherit}
 .pager{display:flex;gap:12px;align-items:center;justify-content:center;margin-top:14px}
 .pager button{border:1px solid var(--line);border-radius:8px;background:var(--paper);padding:8px 14px;font:inherit;cursor:pointer}

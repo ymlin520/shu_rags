@@ -80,6 +80,12 @@ def _connect() -> sqlite3.Connection:
         connection.execute("ALTER TABLE tickets ADD COLUMN rating_comment TEXT NOT NULL DEFAULT ''")
     if "rated_at" not in columns:
         connection.execute("ALTER TABLE tickets ADD COLUMN rated_at TEXT")
+    if "student_email_to" not in columns:
+        connection.execute("ALTER TABLE tickets ADD COLUMN student_email_to TEXT NOT NULL DEFAULT ''")
+    if "student_email_status" not in columns:
+        connection.execute("ALTER TABLE tickets ADD COLUMN student_email_status TEXT NOT NULL DEFAULT 'pending'")
+    if "student_email_error" not in columns:
+        connection.execute("ALTER TABLE tickets ADD COLUMN student_email_error TEXT NOT NULL DEFAULT ''")
     return connection
 
 
@@ -98,6 +104,16 @@ def create_ticket(data: dict) -> dict:
                    (ticket_no, "created", "系統", "AI 查無足夠資料，建立服務需求單", data["office"]))
         row = db.execute("SELECT * FROM tickets WHERE ticket_no=?", (ticket_no,)).fetchone()
         return _local(row)
+
+
+def delete_ticket(ticket_no: str) -> bool:
+    """永久刪除需求單與其事件紀錄；找不到編號時回傳 False。"""
+    with _connect() as db:
+        if not db.execute("SELECT 1 FROM tickets WHERE ticket_no=?", (ticket_no,)).fetchone():
+            return False
+        db.execute("DELETE FROM ticket_events WHERE ticket_no=?", (ticket_no,))
+        db.execute("DELETE FROM tickets WHERE ticket_no=?", (ticket_no,))
+        return True
 
 
 def list_tickets(status: str = "", office: str = "") -> list[dict]:
@@ -170,9 +186,12 @@ def record_ticket_email(ticket_no: str, sent: bool, detail: str) -> None:
                    (ticket_no, "email", "系統", f"通知信已寄至 {detail}" if sent else f"通知信寄送失敗：{detail[:300]}"))
 
 
-def record_student_email(ticket_no: str, sent: bool, detail: str) -> None:
+def record_student_email(ticket_no: str, sent: bool, detail: str, recipient: str = "") -> None:
     with _connect() as db:
         message = f"已寄送回覆與評分連結至學生信箱 {detail}" if sent else f"學生回覆通知寄送失敗：{detail[:300]}"
+        db.execute("UPDATE tickets SET student_email_to=?,student_email_status=?,student_email_error=? WHERE ticket_no=?",
+                   ((recipient or detail)[:200], "sent" if sent else "failed",
+                    "" if sent else detail[:500], ticket_no))
         db.execute("INSERT INTO ticket_events(ticket_no,event_type,actor,message) VALUES(?,?,?,?)",
                    (ticket_no, "email", "系統", message))
 

@@ -1,4 +1,4 @@
-<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>常見問題管理・校務問答</title><link rel="stylesheet" href="/static/admin.css?v=20260907a"><link rel="stylesheet" href="/static/faq-admin.css?v=20260907a"></head><body><main>
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>常見問題管理・校務問答</title><link rel="stylesheet" href="/static/admin.css?v=20260910a"><link rel="stylesheet" href="/static/faq-admin.css?v=20260910a"></head><body><main>
 
 <header><div><small>校務問答</small><h1>常見問題管理</h1><p>匯入試算表、逐筆編輯 FAQ；存檔後前台分類與 AI 回答會立即使用新資料。</p></div><div class="header-actions"><a href="/admin">需求單後台</a><a href="/" target="_blank" rel="noopener">前台問答 ↗</a><button id="export">匯出 CSV</button><button id="logout" hidden>登出</button></div></header>
 
@@ -23,7 +23,7 @@
 <div id="preview-box" hidden>
   <div class="preview-head">
     <div class="counts" id="counts"></div>
-    <div class="modes"><label><input type="radio" name="mode" value="merge" checked>合併更新<small>同編號覆蓋，未出現在這份資料的舊題目保留</small></label><label><input type="radio" name="mode" value="replace">完全取代<small>清空知識庫，只留下這份資料</small></label></div>
+    <div class="modes"><label><input type="radio" name="mode" value="merge" checked>合併更新<small>同編號或同一題會更新原本那筆，並記錄更新時間與更新內容；未出現在這份資料的舊題目保留</small></label><label><input type="radio" name="mode" value="replace">完全取代<small>清空知識庫，只留下這份資料</small></label></div>
   </div>
   <p class="hint" id="mapping"></p>
   <div class="table-wrap preview-wrap"><table><thead><tr><th class="pick"><input type="checkbox" id="pick-all" checked></th><th>列</th><th>編號</th><th>分類</th><th>問題</th><th>建議答案</th><th>主責單位</th><th>處理方式</th></tr></thead><tbody id="preview-rows"></tbody></table></div>
@@ -34,7 +34,7 @@
 <section class="panel">
 <div class="section-title"><h2>所有常見問題</h2><span id="count"></span></div>
 <div class="list-toolbar"><input id="search" type="search" placeholder="搜尋編號、問題、答案或單位"><select id="category-filter"><option value="">所有分類</option></select><select id="office-filter"><option value="">所有主責單位</option></select><button id="add" class="save" type="button">＋ 新增一筆</button><button id="reindex" type="button">重建向量</button></div>
-<div class="table-wrap"><table><thead><tr><th>編號</th><th>分類</th><th>問題／建議答案</th><th>主責單位</th><th>來源</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th>編號</th><th>分類</th><th>問題／建議答案</th><th>主責單位</th><th>更新時間</th><th>更新內容</th><th>來源</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>
 <div class="pager"><button id="prev" type="button">← 上一頁</button><span id="page-info"></span><button id="next" type="button">下一頁 →</button></div>
 </section>
 
@@ -52,4 +52,4 @@
 </form></dialog>
 
 <datalist id="category-list"></datalist><datalist id="office-list"></datalist>
-<script src="/static/faq-admin.js?v=20260907a"></script></body></html>
+<script src="/static/faq-admin.js?v=20260910a"></script></body></html>

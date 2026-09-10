@@ -17,6 +17,12 @@ CSV_PATH = PROJECT_ROOT / "data" / "faq.csv"
 BACKUP_DIR = PROJECT_ROOT / "data" / "faq-backups"
 BACKUP_KEEP = 20
 FIELDS = ["id", "category", "question", "answer", "url", "keywords", "office", "email"]
+# 系統自動記錄的欄位：新增、匯入或編輯時寫入，不開放從試算表匯入或手動修改。
+META_FIELDS = ["updated_at", "update_note"]
+STORE_FIELDS = FIELDS + META_FIELDS
+FIELD_LABELS = {"id": "問題編號", "category": "分類", "question": "問題", "answer": "建議答案",
+                "url": "依據／來源連結", "keywords": "關鍵字", "office": "主責單位", "email": "信箱"}
+SHORT_FIELDS = ("id", "category", "office", "email")  # 更新紀錄會附上前後值的短欄位
 TAIPEI = timezone(timedelta(hours=8))
 MAX_ROWS = 5000
 
@@ -54,6 +60,10 @@ def today() -> str:
     return datetime.now(TAIPEI).strftime("%Y-%m-%d")
 
 
+def now() -> str:
+    return datetime.now(TAIPEI).strftime("%Y-%m-%d %H:%M")
+
+
 # ---------------------------------------------------------------- CSV 讀寫
 
 def read_rows() -> list[dict[str, str]]:
@@ -64,7 +74,7 @@ def read_rows() -> list[dict[str, str]]:
     for encoding in _ENCODINGS:
         try:
             with CSV_PATH.open("r", encoding=encoding, newline="") as source:
-                return [{field: _clean(row.get(field)) for field in FIELDS} for row in csv.DictReader(source)]
+                return [{field: _clean(row.get(field)) for field in STORE_FIELDS} for row in csv.DictReader(source)]
         except UnicodeDecodeError as exc:
             last_error = exc
     raise ValueError(f"faq.csv 不是支援的編碼（UTF-8 或 Big5）：{last_error}")
@@ -75,9 +85,9 @@ def write_rows(rows: list[dict[str, str]]) -> None:
     CSV_PATH.parent.mkdir(parents=True, exist_ok=True)
     temporary = Path(str(CSV_PATH) + ".tmp")
     with temporary.open("w", encoding="utf-8-sig", newline="") as target:
-        writer = csv.DictWriter(target, fieldnames=FIELDS, extrasaction="ignore")
+        writer = csv.DictWriter(target, fieldnames=STORE_FIELDS, extrasaction="ignore")
         writer.writeheader()
-        writer.writerows([{field: row.get(field, "") for field in FIELDS} for row in rows])
+        writer.writerows([{field: row.get(field, "") for field in STORE_FIELDS} for row in rows])
     temporary.replace(CSV_PATH)
 
 
@@ -102,7 +112,7 @@ def embedding_text(row: dict[str, str]) -> str:
 
 
 def _payload(row: dict[str, str]) -> dict[str, str]:
-    return {**{field: row.get(field, "") for field in FIELDS}, "updated_at": row.get("updated_at") or today()}
+    return {**{field: row.get(field, "") for field in STORE_FIELDS}, "updated_at": row.get("updated_at") or today()}
 
 
 def sync_vectors(rows: list[dict[str, str]]) -> int:
@@ -136,6 +146,49 @@ def normalize_id(raw: Any, used: set[str] | None = None) -> str:
     if value:
         return value
     return _next_id(used or set())
+
+
+def _question_key(text: Any) -> str:
+    """判斷是否同一題：忽略大小寫、空白、換行與標點。"""
+    return re.sub(r"[\s\W_]+", "", _clean(text).lower())
+
+
+def _category_key(name: Any) -> str:
+    return re.sub(r"^[一二三四五六七八九十百]+、", "", _clean(name))
+
+
+def _category_map(rows: list[dict[str, str]]) -> dict[str, str]:
+    """試算表多半寫「選課相關」，知識庫是「一、選課相關」；匯入時沿用知識庫既有的寫法。"""
+    names = sorted({row["category"] for row in rows if row["category"]},
+                   key=lambda name: name != _category_key(name))
+    return {_category_key(name): name for name in names}
+
+
+_URL_CHARS = r"A-Za-z0-9\-._~:/?#\[\]@!$&'()*+,;=%"
+_URL = re.compile(rf"https?://[{_URL_CHARS}]+")
+_BROKEN_URL = re.compile(rf"(https?://[{_URL_CHARS}]+)\n(?!https?://)([{_URL_CHARS}]*[-/._%?#=&][{_URL_CHARS}]*)(?=\n|$)")
+
+
+def split_source(text: Any) -> tuple[str, str]:
+    """「依據／來源連結」常混著說明文字與被換行切斷的網址：網址放 url，其餘文字併入關鍵字
+    （與 scripts/import_collab_csv.py 的慣例相同）。回傳（網址, 其餘文字）。"""
+    text = _BROKEN_URL.sub(r"\1\2", _clean(text))
+    if not text or text.lower().startswith(("http://", "https://")):
+        return text, ""
+    match = _URL.search(text)
+    return (match.group(0) if match else ""), re.sub(r"\s+", " ", _URL.sub(" ", text)).strip()
+
+
+def changed_fields(old: dict[str, str], new: dict[str, str]) -> list[str]:
+    """列出內容有變的欄位；短欄位附上前後值，問題、答案等長內容只寫欄位名稱。"""
+    parts = []
+    for field in FIELDS:
+        before, after = _clean(old.get(field)), _clean(new.get(field))
+        if before == after:
+            continue
+        label = FIELD_LABELS[field]
+        parts.append(f"{label}（{before or '空白'} → {after or '空白'}）" if field in SHORT_FIELDS else label)
+    return parts
 
 
 def list_faqs() -> list[dict[str, str]]:
@@ -176,6 +229,13 @@ def save_faq(record: dict[str, Any], original_id: str = "") -> dict[str, str]:
     if not row["keywords"]:
         row["keywords"] = " ".join(part for part in (row["category"], row["office"]) if part)
     target = original_id or row["id"]
+    old = next((existing for existing in rows if existing["id"] == target), None)
+    if old is None:
+        row.update(updated_at=now(), update_note="後台新增")
+    elif parts := changed_fields(old, row):
+        row.update(updated_at=now(), update_note="後台編輯：" + "、".join(parts))
+    else:
+        row.update(updated_at=old["updated_at"], update_note=old["update_note"])
     for index, existing in enumerate(rows):
         if existing["id"] == target:
             rows[index] = row
@@ -289,11 +349,25 @@ def map_table(table: list[list[str]]) -> tuple[list[dict[str, str]], dict[str, s
     raise ValueError("找不到標題列，請確認第一列含有「問題」與「建議答案」欄位")
 
 
+def _match_existing(row: dict[str, str], existing: dict[str, dict[str, str]], by_question: dict[str, str]) -> str:
+    """找出這一列對應的既有 FAQ：後台匯出的編號（Q001、AUTO-…）優先，其次比對題目文字。
+    試算表自己編的 1、2、3 不當作既有編號，避免各處室從 1 編起就蓋掉別人的題目。"""
+    raw = row["id"]
+    if raw and not raw.isdigit() and raw in existing:
+        return raw
+    return by_question.get(_question_key(row["question"]), "")
+
+
 def plan_import(records: list[dict[str, str]]) -> dict[str, Any]:
-    """比對現有 FAQ，標出每一列會新增、更新，還是因為缺欄位被略過。"""
+    """比對現有 FAQ，標出每一列會新增、更新（列出改了哪些欄位），還是因為缺欄位被略過。"""
     if len(records) > MAX_ROWS:
         raise ValueError(f"一次最多匯入 {MAX_ROWS} 筆，目前有 {len(records)} 筆")
-    existing = {row["id"]: row for row in read_rows()}
+    current = read_rows()
+    existing = {row["id"]: row for row in current}
+    by_question: dict[str, str] = {}
+    for row in current:
+        by_question.setdefault(_question_key(row["question"]), row["id"])
+    categories = _category_map(current)
     used = set(existing)
     rows, counts = [], {"create": 0, "update": 0, "skip": 0}
     for number, record in enumerate(records, start=2):
@@ -303,43 +377,67 @@ def plan_import(records: list[dict[str, str]]) -> dict[str, Any]:
             rows.append({**row, "row": number, "action": "skip", "note": "缺少" + "、".join(missing)})
             counts["skip"] += 1
             continue
-        row["id"] = normalize_id(row["id"], used)
+        row["category"] = categories.get(_category_key(row["category"]), row["category"])
+        row["url"], source_note = split_source(row["url"])
+        target = _match_existing(row, existing, by_question)
+        if target:
+            row["id"] = target
+            for field in FIELDS:  # 試算表留空、或只差空白換行的欄位沿用原本內容
+                if not row[field] or re.sub(r"\s+", "", row[field]) == re.sub(r"\s+", "", existing[target][field]):
+                    row[field] = existing[target][field]
+        else:
+            row["id"] = normalize_id(row["id"], used)
+            if row["id"] in used:
+                row["id"] = _next_id(used)
+            if not row["keywords"]:
+                row["keywords"] = " ".join(part for part in (row["category"], row["office"]) if part)
+        if source_note and _question_key(source_note) not in _question_key(row["keywords"]):
+            row["keywords"] = f"{row['keywords']} {source_note}".strip()
+        if target:
+            parts = changed_fields(existing[target], row)
+            action, note = "update", f"更新 {target}：" + ("、".join(parts) if parts else "內容相同，會記錄為重新匯入")
+        else:
+            action, note = "create", "新增"
         used.add(row["id"])
-        if not row["keywords"]:
-            row["keywords"] = " ".join(part for part in (row["category"], row["office"]) if part)
-        action = "update" if row["id"] in existing else "create"
-        note = f"覆蓋原本的「{existing[row['id']]['question'][:20]}」" if action == "update" else "新增"
         rows.append({**row, "row": number, "action": action, "note": note})
         counts[action] += 1
     return {"rows": rows, "counts": counts, "existing_total": len(existing)}
 
 
 def apply_import(rows: list[dict[str, Any]], mode: str = "merge") -> dict[str, Any]:
-    """把預覽通過的資料寫入 CSV 與向量庫。merge 是合併更新，replace 是整份取代。"""
+    """把預覽通過的資料寫入 CSV 與向量庫，並記錄每筆的更新時間與更新內容。
+    merge 是合併更新，replace 是整份取代。"""
     if mode not in ("merge", "replace"):
         raise ValueError("匯入模式只能是 merge 或 replace")
     records = [{field: _clean(row.get(field)) for field in FIELDS} for row in rows
                if _clean(row.get("question")) and _clean(row.get("answer"))]
     if not records:
         raise ValueError("沒有可匯入的資料")
-    used: set[str] = set()
+    existing = read_rows() if mode == "merge" else []
+    used = {row["id"] for row in existing}  # 沒給編號的列接在現有最大編號之後，不會從 Q001 重編
     for record in records:
         record["id"] = normalize_id(record["id"], used)
         used.add(record["id"])
+    stamp = now()
     backup = backup_csv()
     if mode == "replace":
+        for record in records:
+            record.update(updated_at=stamp, update_note="整份取代匯入")
         recreate_collection()
         write_rows(records)
         sync_vectors(records)
         return {"mode": mode, "created": len(records), "updated": 0, "total": len(records), "backup": backup}
-    existing = read_rows()
     index = {row["id"]: position for position, row in enumerate(existing)}
     created = updated = 0
     for record in records:
         if record["id"] in index:
+            parts = changed_fields(existing[index[record["id"]]], record)
+            record.update(updated_at=stamp,
+                          update_note="匯入更新：" + "、".join(parts) if parts else "重新匯入，內容無變更")
             existing[index[record["id"]]] = record
             updated += 1
         else:
+            record.update(updated_at=stamp, update_note="匯入新增")
             index[record["id"]] = len(existing)
             existing.append(record)
             created += 1
@@ -350,7 +448,7 @@ def apply_import(rows: list[dict[str, Any]], mode: str = "merge") -> dict[str, A
 
 def export_csv() -> str:
     output = io.StringIO()
-    writer = csv.DictWriter(output, fieldnames=FIELDS, extrasaction="ignore")
+    writer = csv.DictWriter(output, fieldnames=STORE_FIELDS, extrasaction="ignore")
     writer.writeheader()
     writer.writerows(read_rows())
     return "﻿" + output.getvalue()

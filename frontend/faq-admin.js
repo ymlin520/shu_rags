@@ -2,6 +2,7 @@ const $ = s => document.querySelector(s);
 const ADMIN_TOKEN_KEY = 'school-faq-admin-token';
 const PAGE_SIZE = 50;
 const FIELDS = ['id', 'category', 'question', 'answer', 'url', 'keywords', 'office', 'email'];
+const SEARCH_FIELDS = [...FIELDS, 'updated_at', 'update_note'];
 let token = localStorage.getItem(ADMIN_TOKEN_KEY) || '';
 let faqs = [], summary = {}, preview = null, source = 'url', page = 1, editingId = null;
 
@@ -51,7 +52,7 @@ function filtered() {
   const category = $('#category-filter').value, office = $('#office-filter').value;
   return faqs.filter(x =>
     (!category || (x.category || '未分類') === category) && (!office || x.office === office) &&
-    (!keyword || FIELDS.some(f => String(x[f] || '').toLowerCase().includes(keyword))));
+    (!keyword || SEARCH_FIELDS.some(f => String(x[f] || '').toLowerCase().includes(keyword))));
 }
 
 function renderList() {
@@ -61,9 +62,10 @@ function renderList() {
   $('#count').textContent = rows.length === faqs.length ? `共 ${faqs.length} 筆` : `符合 ${rows.length} 筆／共 ${faqs.length} 筆`;
   $('#rows').innerHTML = slice.length ? slice.map(x => `<tr><td class="id">${esc(x.id)}</td><td>${esc(x.category) || '<span class="muted">未分類</span>'}</td>
 <td><span class="q">${esc(x.question)}</span><small class="a">${esc(cut(x.answer, 90))}</small></td><td>${esc(x.office) || '—'}</td>
+<td class="when">${esc(x.updated_at) || '—'}</td><td class="note">${esc(x.update_note) || '—'}</td>
 <td>${x.url ? `<a href="${esc(x.url)}" target="_blank" rel="noopener">開啟 ↗</a>` : '—'}</td>
 <td><button class="edit" data-edit="${esc(x.id)}" type="button">編輯 →</button></td></tr>`).join('')
-    : '<tr><td colspan="6">沒有符合條件的常見問題</td></tr>';
+    : '<tr><td colspan="8">沒有符合條件的常見問題</td></tr>';
   $('#page-info').textContent = `第 ${page} / ${pages} 頁`;
   $('#prev').disabled = page <= 1; $('#next').disabled = page >= pages;
 }
@@ -123,7 +125,7 @@ async function commitImport() {
   const mode = document.querySelector('input[name=mode]:checked').value;
   const warning = mode === 'replace'
     ? `「完全取代」會刪掉目前知識庫的 ${preview.existing_total} 筆資料，只留下勾選的 ${rows.length} 筆。確定要繼續嗎？`
-    : `確定匯入 ${rows.length} 筆？同編號的內容會被覆蓋。`;
+    : `確定匯入 ${rows.length} 筆？已存在的題目會更新原本那筆，並記錄更新時間與更新內容。`;
   if (!confirm(warning)) return;
   const button = $('#commit'); button.disabled = true; button.textContent = '匯入中…';
   msg('#commit-msg', '正在寫入 CSV 並重新產生向量，資料量大時需要幾十秒，請不要關閉視窗。', true);

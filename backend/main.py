@@ -16,7 +16,7 @@ from .embedding import embed_text
 from .llm_service import answer_from_faq, ollama_status, route_ticket_office
 from .knowledge_service import faq_categories, sync_resolved_ticket
 from . import faq_service
-from .analytics import add_ticket_reply, create_ticket, list_tickets, log_feedback, log_query, public_ticket, rate_ticket, record_knowledge_sync, record_student_email, record_ticket_email, stats, ticket_detail, update_ticket
+from .analytics import add_ticket_reply, create_ticket, delete_ticket, list_tickets, log_feedback, log_query, public_ticket, rate_ticket, record_knowledge_sync, record_student_email, record_ticket_email, stats, ticket_detail, update_ticket
 from .mail_service import (mail_status, save_office_emails, save_password, save_settings,
                            send_student_resolution_email, send_test_email, send_ticket_email)
 from .models import (AnswerResponse, FaqImportRequest, FaqUpsertRequest, FeedbackRequest, FeedbackResponse,
@@ -309,8 +309,8 @@ def _notify_ticket(ticket: dict) -> None:
 
 
 def _notify_student_resolution(ticket: dict) -> None:
-    sent, detail = send_student_resolution_email(ticket)
-    record_student_email(ticket["ticket_no"], sent, detail)
+    sent, detail, recipient = send_student_resolution_email(ticket)
+    record_student_email(ticket["ticket_no"], sent, detail, recipient)
 
 
 def _sync_ticket_knowledge(ticket: dict) -> None:
@@ -481,6 +481,15 @@ def ticket_update(ticket_no: str, request: TicketUpdateRequest, background_tasks
     return ticket
 
 
+@app.delete("/api/admin/tickets/{ticket_no}")
+def ticket_delete(ticket_no: str, x_admin_token: str = Header(default="")):
+    """永久刪除需求單；問題、回覆、Email 與事件紀錄一併移除，無法復原。"""
+    require_admin(x_admin_token)
+    if not delete_ticket(ticket_no):
+        raise HTTPException(status_code=404, detail="找不到需求單")
+    return {"deleted": True, "ticket_no": ticket_no}
+
+
 @app.post("/api/admin/knowledge/sync-resolved")
 def knowledge_sync_resolved(x_admin_token: str = Header(default="")):
     require_admin(x_admin_token)
@@ -502,7 +511,7 @@ def tickets_csv(x_admin_token: str = Header(default="")):
     require_admin(x_admin_token)
     rows = list_tickets()
     output = io.StringIO()
-    fields = ["ticket_no","status","office","category","subject","description","requester_name","requester_contact","assignee","resolution","rating","rating_comment","rated_at","created_at","updated_at","resolved_at"]
+    fields = ["ticket_no","status","office","category","subject","description","requester_name","requester_contact","student_email_to","student_email_status","student_email_error","assignee","resolution","rating","rating_comment","rated_at","created_at","updated_at","resolved_at"]
     writer = csv.DictWriter(output, fieldnames=fields, extrasaction="ignore")
     writer.writeheader(); writer.writerows(rows)
     data = "\ufeff" + output.getvalue()

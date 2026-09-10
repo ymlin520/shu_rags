@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import smtplib
 import base64
 from html import escape
@@ -21,6 +22,7 @@ PASSWORD_FILE = PROJECT_ROOT / "mail-app-password.txt"
 GOOGLE_CLIENT_FILE = PROJECT_ROOT / "gmail-oauth-client.json"
 GOOGLE_TOKEN_FILE = PROJECT_ROOT / "gmail-oauth-token.json"
 OFFICE_TOKENS_FILE = PROJECT_ROOT / "office-tokens.json"
+_EMAIL_PATTERN = re.compile(r"^[^@\s,;]+@[^@\s,;]+\.[^@\s,;]+$")
 
 
 def _json(path: Path, default: dict) -> dict:
@@ -242,16 +244,29 @@ def send_ticket_email(ticket: dict) -> tuple[bool, str]:
         return False, f"{type(exc).__name__}: {exc}"
 
 
-def send_student_resolution_email(ticket: dict) -> tuple[bool, str]:
+def student_recipient(ticket: dict, settings: dict | None = None) -> tuple[str, bool]:
+    """回傳 (結案信收件人, 是否為提問者本人信箱)。
+
+    前台送單時會請學生填 Email，存在 requester_contact。該欄是自由文字，
+    可能是電話或「未提供」，所以只在通過 Email 格式檢查時才寄給本人，
+    否則退回管理後台設定的通知清單，確保信不會掉。
+    """
+    contact = str(ticket.get("requester_contact") or "").strip()
+    if _EMAIL_PATTERN.match(contact):
+        return contact, True
+    settings = load_settings() if settings is None else settings
+    fallback = settings.get("student_recipients") or [DEFAULT_EMAIL]
+    return ", ".join(fallback), False
+
+
+def send_student_resolution_email(ticket: dict) -> tuple[bool, str, str]:
     settings = load_settings()
+    recipient, _ = student_recipient(ticket, settings)
     if not _configured(settings):
-        return False, "尚未設定寄件帳號或應用程式密碼"
-    # 單機測試版寄至管理後台設定的通知清單；未來串接會員系統後再改用學生帳號信箱。
-    recipients = settings.get("student_recipients") or [DEFAULT_EMAIL]
-    recipient = ", ".join(recipients)
+        return False, "尚未設定寄件帳號或應用程式密碼", recipient
     access_key = str(ticket.get("access_key") or "").strip()
     if not access_key:
-        return False, "需求單缺少學生存取碼"
+        return False, "需求單缺少學生存取碼", recipient
     ticket_link = f"{base_url()}/ticket/{ticket['ticket_no']}?key={access_key}"
     question = str(ticket.get("query") or ticket.get("subject") or "")
     answer = str(ticket.get("resolution") or "")
@@ -284,9 +299,9 @@ def send_student_resolution_email(ticket: dict) -> tuple[bool, str]:
     )
     try:
         _send(message)
-        return True, recipient
+        return True, recipient, recipient
     except Exception as exc:
-        return False, f"{type(exc).__name__}: {exc}"
+        return False, f"{type(exc).__name__}: {exc}", recipient
 
 
 def send_test_email(recipient: str) -> tuple[bool, str]:

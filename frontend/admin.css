@@ -38,3 +38,7 @@
 .badge.overdue{color:#c83d1d;border-color:var(--accent);background:#f9ddd3;font-weight:700}
 .dash-foot{font-size:12px;color:#8a837c;margin:14px 2px 0}
 @media(max-width:900px){.unit-row,.pend-row{grid-template-columns:1fr 1fr;gap:8px}.unit-head,.pend-head{display:none}.score,.pend-row .wait,.pend-row span:last-child{text-align:left}}
+
+.mail-log-section{margin:18px 0}.mail-log-section>p{margin:4px 0 12px;font-size:13px}#mail-log-search{width:min(360px,100%);padding:10px;border:1px solid var(--line);border-radius:8px;font:inherit;margin-bottom:6px}#mail-log td small{margin-top:3px}#mail-log-count{font-size:13px;color:#8a837c}
+
+.row-actions{white-space:nowrap;text-align:right}.danger{border:1px solid #d9b3a8;background:transparent;color:#c83d1d;border-radius:8px;padding:6px 12px;margin-left:8px;cursor:pointer;font:inherit;font-size:13px}.danger:hover{background:#f9ddd3;border-color:var(--accent)}.mail-line .danger{margin-left:auto}
