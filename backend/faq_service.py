@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import requests
 
 from .config import BATCH_SIZE, PROJECT_ROOT
@@ -25,6 +26,8 @@ FIELD_LABELS = {"id": "問題編號", "category": "分類", "question": "問題"
 SHORT_FIELDS = ("id", "category", "office", "email")  # 更新紀錄會附上前後值的短欄位
 TAIPEI = timezone(timedelta(hours=8))
 MAX_ROWS = 5000
+SIMILAR_THRESHOLD = 0.85  # 新題目與舊題目的題目語意相似度達此值就在預覽提醒（只提醒，不擋匯入）
+RELATED_THRESHOLD = 0.72  # 介於兩者之間只列為「相關舊題」供參考；這個模型換句話說常落在 0.72～0.85，不同題也會到 0.8 左右
 
 # 試算表標題（中文或英文）對應到 FAQ 欄位，比對前會先去空白並轉小寫。
 HEADER_ALIASES = {
@@ -369,14 +372,18 @@ def plan_import(records: list[dict[str, str]]) -> dict[str, Any]:
         by_question.setdefault(_question_key(row["question"]), row["id"])
     categories = _category_map(current)
     used = set(existing)
-    rows, counts = [], {"create": 0, "update": 0, "skip": 0}
+    rows, counts = [], {"create": 0, "update": 0, "skip": 0, "same": 0, "similar": 0, "warn": 0}
+    seen: dict[str, int] = {}  # 同一份表裡重複的題目只匯入第一次出現的那列
     for number, record in enumerate(records, start=2):
         row = {field: _clean(record.get(field)) for field in FIELDS}
         missing = [name for field, name in (("question", "問題"), ("answer", "建議答案")) if not row[field]]
-        if missing:
-            rows.append({**row, "row": number, "action": "skip", "note": "缺少" + "、".join(missing)})
+        key = _question_key(row["question"])
+        if missing or key in seen:
+            note = "缺少" + "、".join(missing) if missing else f"與第 {seen[key]} 列題目重複"
+            rows.append({**row, "row": number, "action": "skip", "note": note})
             counts["skip"] += 1
             continue
+        seen[key] = number
         row["category"] = categories.get(_category_key(row["category"]), row["category"])
         row["url"], source_note = split_source(row["url"])
         target = _match_existing(row, existing, by_question)
@@ -393,15 +400,55 @@ def plan_import(records: list[dict[str, str]]) -> dict[str, Any]:
                 row["keywords"] = " ".join(part for part in (row["category"], row["office"]) if part)
         if source_note and _question_key(source_note) not in _question_key(row["keywords"]):
             row["keywords"] = f"{row['keywords']} {source_note}".strip()
+        extra = {"similar": "", "warn": "", "related": ""}
         if target:
             parts = changed_fields(existing[target], row)
             action, note = "update", f"更新 {target}：" + ("、".join(parts) if parts else "內容相同，會記錄為重新匯入")
+            if not parts:
+                counts["same"] += 1
+            if _question_key(existing[target]["question"]) != key:  # 只會發生在依編號對到題目不同的舊題
+                extra["warn"] = f"編號 {target} 原本的題目是「{existing[target]['question'][:30]}」，匯入會把它換成這一題"
+                counts["warn"] += 1
         else:
             action, note = "create", "新增"
         used.add(row["id"])
-        rows.append({**row, "row": number, "action": action, "note": note})
+        rows.append({**row, "row": number, "action": action, "note": note, **extra})
         counts[action] += 1
+    counts["similar"] = _flag_similar(rows, current)
     return {"rows": rows, "counts": counts, "existing_total": len(existing)}
+
+
+def _flag_similar(rows: list[dict[str, Any]], current: list[dict[str, str]]) -> int:
+    """替要「新增」的列找知識庫裡意思相近的舊題，寫進 row["similar"]，回傳提醒筆數。
+    答案一字不差優先；否則比題目語意，相似度達 SIMILAR_THRESHOLD 才提醒。只提醒，匯不匯由管理者決定。"""
+    targets = [row for row in rows if row["action"] == "create"]
+    known = [row for row in current if row["question"].strip()]
+    if not targets or not known:
+        return 0
+    by_answer: dict[str, dict[str, str]] = {}
+    for row in known:
+        by_answer.setdefault(_question_key(row["answer"]), row)
+    try:
+        vectors = np.array(embed_texts([row["question"] for row in known] + [row["question"] for row in targets]))
+        scores = vectors[len(known):] @ vectors[:len(known)].T
+    except Exception:  # 相似提醒只是輔助，模型出問題時照常預覽
+        scores = None
+    flagged = 0
+    for position, row in enumerate(targets):
+        same_answer = by_answer.get(_question_key(row["answer"]))
+        if same_answer:
+            row["similar"] = f"答案與 {same_answer['id']}「{same_answer['question'][:24]}」完全相同"
+        elif scores is not None:
+            order = scores[position].argsort()[::-1]
+            best = int(order[0])
+            if scores[position][best] >= SIMILAR_THRESHOLD:
+                row["similar"] = (f"可能與 {known[best]['id']}「{known[best]['question'][:24]}」意思相近"
+                                  f"（相似度 {scores[position][best]:.2f}）")
+            else:
+                row["related"] = "、".join(f"{known[i]['id']}「{known[i]['question'][:18]}」（{scores[position][i]:.2f}）"
+                                          for i in order[:2] if scores[position][i] >= RELATED_THRESHOLD)
+        flagged += bool(row["similar"])
+    return flagged
 
 
 def apply_import(rows: list[dict[str, Any]], mode: str = "merge") -> dict[str, Any]:
@@ -426,9 +473,13 @@ def apply_import(rows: list[dict[str, Any]], mode: str = "merge") -> dict[str, A
         recreate_collection()
         write_rows(records)
         sync_vectors(records)
-        return {"mode": mode, "created": len(records), "updated": 0, "total": len(records), "backup": backup}
+        report = [{"id": record["id"], "question": record["question"], "result": "新增", "note": record["update_note"]}
+                  for record in records]
+        return {"mode": mode, "created": len(records), "updated": 0, "total": len(records), "backup": backup,
+                "updated_at": stamp, "report": report}
     index = {row["id"]: position for position, row in enumerate(existing)}
     created = updated = 0
+    report = []  # 逐筆結果，後台匯入後直接列給管理者看
     for record in records:
         if record["id"] in index:
             parts = changed_fields(existing[index[record["id"]]], record)
@@ -436,14 +487,18 @@ def apply_import(rows: list[dict[str, Any]], mode: str = "merge") -> dict[str, A
                           update_note="匯入更新：" + "、".join(parts) if parts else "重新匯入，內容無變更")
             existing[index[record["id"]]] = record
             updated += 1
+            result = "更新" if parts else "無變更"
         else:
             record.update(updated_at=stamp, update_note="匯入新增")
             index[record["id"]] = len(existing)
             existing.append(record)
             created += 1
+            result = "新增"
+        report.append({"id": record["id"], "question": record["question"], "result": result, "note": record["update_note"]})
     write_rows(existing)
     sync_vectors(records)
-    return {"mode": mode, "created": created, "updated": updated, "total": len(existing), "backup": backup}
+    return {"mode": mode, "created": created, "updated": updated, "total": len(existing), "backup": backup,
+            "updated_at": stamp, "report": report}
 
 
 def export_csv() -> str:

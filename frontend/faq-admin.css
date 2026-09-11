@@ -42,6 +42,21 @@ tr.skip{background:#faf6f3;color:#9a938a}
 .act.create{border-color:#1d7a4d;color:#1d7a4d}
 .act.update{border-color:var(--accent);color:#c83d1d}
 .act.skip{color:#77716a}
+.act.same{color:#77716a}
+.act.similar{border-color:#c98a00;color:#9a5b00}
+.counts span.similar{border-color:#c98a00;color:#9a5b00}
+.counts span.warn{border-color:#c83d1d;color:#c83d1d;font-weight:700}
+tr.flagged{background:#fff8e8}
+.flag{display:block;margin-top:4px;font-size:12px;line-height:1.5}
+.flag.similar{color:#9a5b00}
+.flag.warn{color:#c83d1d;font-weight:700}
+.flag.related{color:#77716a}
+#report{margin-top:18px;border-top:1px solid #ddd8d1;padding-top:16px}
+.report-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap}
+.report-head p{margin:0;line-height:1.7;font-size:14px}
+.report-head button{border:1px solid #292724;border-radius:9px;background:var(--paper);padding:8px 14px;font:inherit;cursor:pointer}
+#report-rows td{vertical-align:top;font-size:14px}
+#report-rows .id{font-family:ui-monospace,Consolas,monospace;font-size:13px;white-space:nowrap}
 
 .list-toolbar{display:flex;gap:10px;margin:14px 0;flex-wrap:wrap;align-items:center}
 .list-toolbar input,.list-toolbar select{padding:10px;border:1px solid var(--line);border-radius:8px;font:inherit}

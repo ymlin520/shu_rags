@@ -1,4 +1,4 @@
-<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>常見問題管理・校務問答</title><link rel="stylesheet" href="/static/admin.css?v=20260910a"><link rel="stylesheet" href="/static/faq-admin.css?v=20260910a"></head><body><main>
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>常見問題管理・校務問答</title><link rel="stylesheet" href="/static/admin.css?v=20260911b"><link rel="stylesheet" href="/static/faq-admin.css?v=20260911b"></head><body><main>
 
 <header><div><small>校務問答</small><h1>常見問題管理</h1><p>匯入試算表、逐筆編輯 FAQ；存檔後前台分類與 AI 回答會立即使用新資料。</p></div><div class="header-actions"><a href="/admin">需求單後台</a><a href="/" target="_blank" rel="noopener">前台問答 ↗</a><button id="export">匯出 CSV</button><button id="logout" hidden>登出</button></div></header>
 
@@ -16,7 +16,7 @@
 <div class="source" data-panel="file" hidden><label>選擇檔案<input id="src-file" type="file" accept=".csv,.tsv,.txt,.xlsx,.xlsm"></label><p class="hint">支援 .csv、.tsv、.xlsx。<button type="button" class="linkish" id="template">下載欄位範本 CSV</button></p></div>
 <div class="source" data-panel="text" hidden><label>貼上內容<textarea id="src-text" rows="6" placeholder="在 Google 試算表整片選取後複製，連同標題列一起貼在這裡"></textarea></label><p class="hint">第一列必須是標題列，且要有「問題」與「建議答案」兩欄。</p></div>
 
-<p class="hint fields-hint">可辨識的欄位標題：<b>問題編號</b>、<b>分類</b>、<b>問題</b>、<b>建議答案</b>、<b>依據／來源連結</b>、<b>主責單位</b>、<b>信箱</b>（也接受 id／category／question／answer／url／keywords 等英文標題）。只有<b>問題</b>與<b>建議答案</b>是必填。</p>
+<p class="hint fields-hint">可辨識的欄位標題：<b>問題編號</b>、<b>分類</b>、<b>問題</b>、<b>建議答案</b>、<b>依據／來源連結</b>、<b>主責單位</b>、<b>信箱</b>（也接受 id／category／question／answer／url／keywords 等英文標題）。只有<b>問題</b>與<b>建議答案</b>是必填。<br>題目文字與知識庫相同的會<b>更新原本那筆</b>並記錄更新時間與更新內容；要新增的題目若與舊題意思相近，預覽會先提醒。</p>
 
 <div class="import-actions"><button id="preview" class="save" type="button">讀取並預覽</button><span id="import-msg"></span></div>
 
@@ -29,11 +29,16 @@
   <div class="table-wrap preview-wrap"><table><thead><tr><th class="pick"><input type="checkbox" id="pick-all" checked></th><th>列</th><th>編號</th><th>分類</th><th>問題</th><th>建議答案</th><th>主責單位</th><th>處理方式</th></tr></thead><tbody id="preview-rows"></tbody></table></div>
   <div class="import-actions"><button id="commit" class="save" type="button">確認匯入</button><button id="cancel" type="button">取消</button><span id="commit-msg"></span></div>
 </div>
+
+<div id="report" class="report" hidden>
+  <div class="report-head"><p id="report-summary"></p><button id="report-close" type="button">關閉報告</button></div>
+  <div class="table-wrap preview-wrap"><table><thead><tr><th>編號</th><th>問題</th><th>結果</th><th>更新內容／原因</th></tr></thead><tbody id="report-rows"></tbody></table></div>
+</div>
 </section>
 
 <section class="panel">
 <div class="section-title"><h2>所有常見問題</h2><span id="count"></span></div>
-<div class="list-toolbar"><input id="search" type="search" placeholder="搜尋編號、問題、答案或單位"><select id="category-filter"><option value="">所有分類</option></select><select id="office-filter"><option value="">所有主責單位</option></select><button id="add" class="save" type="button">＋ 新增一筆</button><button id="reindex" type="button">重建向量</button></div>
+<div class="list-toolbar"><input id="search" type="search" placeholder="搜尋編號、問題、答案或單位"><select id="category-filter"><option value="">所有分類</option></select><select id="office-filter"><option value="">所有主責單位</option></select><select id="sort"><option value="">依編號排列</option><option value="recent">最近更新在前</option></select><button id="add" class="save" type="button">＋ 新增一筆</button><button id="reindex" type="button">重建向量</button></div>
 <div class="table-wrap"><table><thead><tr><th>編號</th><th>分類</th><th>問題／建議答案</th><th>主責單位</th><th>更新時間</th><th>更新內容</th><th>來源</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>
 <div class="pager"><button id="prev" type="button">← 上一頁</button><span id="page-info"></span><button id="next" type="button">下一頁 →</button></div>
 </section>
@@ -52,4 +57,4 @@
 </form></dialog>
 
 <datalist id="category-list"></datalist><datalist id="office-list"></datalist>
-<script src="/static/faq-admin.js?v=20260910a"></script></body></html>
+<script src="/static/faq-admin.js?v=20260911b"></script></body></html>

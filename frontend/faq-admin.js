@@ -57,6 +57,7 @@ function filtered() {
 
 function renderList() {
   const rows = filtered(), pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  if ($('#sort').value === 'recent') rows.sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')));
   page = Math.min(Math.max(1, page), pages);
   const slice = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   $('#count').textContent = rows.length === faqs.length ? `共 ${faqs.length} 筆` : `符合 ${rows.length} 筆／共 ${faqs.length} 筆`;
@@ -85,6 +86,7 @@ async function runPreview() {
     if (!$('#src-text').value.trim()) return msg('#import-msg', '請先貼上資料。', false);
     body.append('text', $('#src-text').value);
   }
+  $('#report').hidden = true;
   const button = $('#preview'); button.disabled = true; button.textContent = '讀取中…';
   msg('#import-msg', '正在讀取來源資料…', true);
   try {
@@ -102,21 +104,24 @@ async function runPreview() {
 function renderPreview() {
   const { counts, rows, header, existing_total: existing } = preview;
   $('#preview-box').hidden = false;
-  $('#counts').innerHTML = `<span class="create">新增 ${counts.create}</span><span class="update">更新既有 ${counts.update}</span><span class="skip">略過 ${counts.skip}</span><span>目前知識庫 ${existing} 筆</span>`;
+  $('#counts').innerHTML = `<span class="create">新增 ${counts.create}</span><span class="update">更新既有 ${counts.update}${counts.same ? `（其中內容相同 ${counts.same}）` : ''}</span><span class="skip">略過 ${counts.skip}</span>` +
+    (counts.similar ? `<span class="similar">相似提醒 ${counts.similar}</span>` : '') + (counts.warn ? `<span class="warn">編號衝突 ${counts.warn}</span>` : '') +
+    `<span>目前知識庫 ${existing} 筆</span>`;
   $('#mapping').innerHTML = '對應到的欄位：' + FIELDS.filter(f => header[f]).map(f => `<code>${esc(header[f])}</code> → ${f}`).join('　') +
     (FIELDS.some(f => !header[f]) ? `　（未提供：${FIELDS.filter(f => !header[f]).join('、')}）` : '');
-  $('#preview-rows').innerHTML = rows.map((x, index) => `<tr class="${x.action}">
-<td class="pick">${x.action === 'skip' ? '' : `<input type="checkbox" data-row="${index}" checked>`}</td><td>${x.row}</td>
+  $('#preview-rows').innerHTML = rows.map((x, index) => `<tr class="${x.action}${x.similar || x.warn ? ' flagged' : ''}">
+<td class="pick">${x.action === 'skip' ? '' : `<input type="checkbox" data-row="${index}" ${x.warn ? '' : 'checked'}>`}</td><td>${x.row}</td>
 <td class="id">${esc(x.id)}</td><td>${esc(cut(x.category, 14))}</td><td><span class="cell">${esc(x.question)}</span></td>
 <td><span class="cell">${esc(cut(x.answer, 120))}</span></td><td>${esc(x.office)}</td>
-<td><b class="act ${x.action}">${x.action === 'create' ? '新增' : x.action === 'update' ? '更新' : '略過'}</b><small class="a">${esc(x.note)}</small></td></tr>`).join('');
-  $('#pick-all').checked = true;
+<td><b class="act ${x.action}">${x.action === 'create' ? '新增' : x.action === 'update' ? '更新' : '略過'}</b><small class="a">${esc(x.note)}</small>${x.similar ? `<small class="flag similar">⚠ ${esc(x.similar)}</small>` : ''}${x.related ? `<small class="flag related">相關舊題：${esc(x.related)}</small>` : ''}${x.warn ? `<small class="flag warn">⚠ ${esc(x.warn)}（預設不勾選）</small>` : ''}</td></tr>`).join('');
+  $('#pick-all').checked = !rows.some(x => x.warn);
   msg('#commit-msg', '', true);
 }
 
+const pickedIndexes = () => [...document.querySelectorAll('#preview-rows [data-row]:checked')].map(input => Number(input.dataset.row));
+
 function pickedRows() {
-  return [...document.querySelectorAll('#preview-rows [data-row]:checked')]
-    .map(input => Object.fromEntries(FIELDS.map(f => [f, preview.rows[Number(input.dataset.row)][f]])));
+  return pickedIndexes().map(index => Object.fromEntries(FIELDS.map(f => [f, preview.rows[index][f]])));
 }
 
 async function commitImport() {
@@ -125,7 +130,10 @@ async function commitImport() {
   const mode = document.querySelector('input[name=mode]:checked').value;
   const warning = mode === 'replace'
     ? `「完全取代」會刪掉目前知識庫的 ${preview.existing_total} 筆資料，只留下勾選的 ${rows.length} 筆。確定要繼續嗎？`
-    : `確定匯入 ${rows.length} 筆？已存在的題目會更新原本那筆，並記錄更新時間與更新內容。`;
+    : (() => {
+      const creates = pickedIndexes().filter(index => preview.rows[index].action === 'create').length;
+      return `確定匯入 ${rows.length} 筆？新增 ${creates} 筆、更新既有 ${rows.length - creates} 筆；更新的題目會記錄更新時間與更新內容。`;
+    })();
   if (!confirm(warning)) return;
   const button = $('#commit'); button.disabled = true; button.textContent = '匯入中…';
   msg('#commit-msg', '正在寫入 CSV 並重新產生向量，資料量大時需要幾十秒，請不要關閉視窗。', true);
@@ -134,11 +142,31 @@ async function commitImport() {
     if (!response.ok) throw new Error(await detail(response));
     const result = await response.json();
     await load();
+    renderReport(result, preview);
     $('#preview-box').hidden = true; preview = null;
-    msg('#import-msg', `匯入完成：新增 ${result.created} 筆、更新 ${result.updated} 筆，知識庫現有 ${result.total} 筆。${result.backup ? `舊檔已備份為 data/faq-backups/${result.backup}。` : ''}`, true);
+    msg('#import-msg', '匯入完成，逐筆結果列在下方。', true);
   } catch (error) {
     msg('#commit-msg', error.message, false);
   } finally { button.disabled = false; button.textContent = '確認匯入' }
+}
+
+function renderReport(result, plan) {
+  const order = { '更新': 0, '新增': 1, '無變更': 2 }, tone = { '更新': 'update', '新增': 'create', '無變更': 'same' };
+  const done = [...(result.report || [])].sort((a, b) => order[a.result] - order[b.result]);
+  const imported = new Set(done.map(d => d.id));
+  const skipped = plan.rows.filter(x => x.action === 'skip');
+  const similar = plan.rows.filter(x => x.similar && imported.has(x.id));
+  const total = name => done.filter(d => d.result === name).length;
+  const line = (id, question, label, cls, note) => `<tr><td class="id">${esc(id)}</td><td>${esc(cut(question, 60))}</td><td><b class="act ${cls}">${label}</b></td><td>${esc(note)}</td></tr>`;
+  $('#report-summary').innerHTML = `<strong>匯入完成（${esc(result.updated_at || '')}）</strong>：新增 ${total('新增')} 筆、更新 ${total('更新')} 筆、內容無變更 ${total('無變更')} 筆、略過 ${skipped.length} 筆` +
+    `${similar.length ? `、相似提醒 ${similar.length} 筆` : ''}。知識庫現有 ${result.total} 筆${result.backup ? `，匯入前的資料已備份為 data/faq-backups/${esc(result.backup)}` : ''}。`;
+  $('#report-rows').innerHTML = [
+    ...done.map(d => line(d.id, d.question, d.result, tone[d.result] || 'same', d.note)),
+    ...skipped.map(x => line(`第 ${x.row} 列`, x.question || '（沒有題目）', '略過', 'skip', x.note)),
+    ...similar.map(x => line(x.id, x.question, '相似提醒', 'similar', x.similar)),
+  ].join('') || '<tr><td colspan="4">沒有資料</td></tr>';
+  $('#report').hidden = false;
+  $('#report').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 /* ----------------------------------------------------------------- 單筆編輯 */
@@ -213,6 +241,8 @@ document.querySelectorAll('.tab').forEach(tab => tab.onclick = () => {
 $('#preview').onclick = runPreview;
 $('#commit').onclick = commitImport;
 $('#cancel').onclick = () => { $('#preview-box').hidden = true; preview = null; msg('#import-msg', '', true) };
+$('#report-close').onclick = () => { $('#report').hidden = true };
+$('#sort').onchange = () => { page = 1; renderList() };
 $('#pick-all').onchange = event => document.querySelectorAll('#preview-rows [data-row]').forEach(input => { input.checked = event.target.checked });
 $('#template').onclick = () => download('/api/admin/faqs/template.csv', 'faq-template.csv');
 $('#export').onclick = () => download('/api/admin/faqs.csv', 'faq.csv');
