@@ -101,13 +101,13 @@ def create_ticket(data: dict) -> dict:
              data["office"], data["requester_name"], data["requester_contact"], access_key),
         )
         db.execute("INSERT INTO ticket_events(ticket_no,event_type,actor,message,office) VALUES(?,?,?,?,?)",
-                   (ticket_no, "created", "系統", "AI 查無足夠資料，建立服務需求單", data["office"]))
+                   (ticket_no, "created", "系統", "AI 查無足夠資料，建立服務詢問單", data["office"]))
         row = db.execute("SELECT * FROM tickets WHERE ticket_no=?", (ticket_no,)).fetchone()
         return _local(row)
 
 
 def delete_ticket(ticket_no: str) -> bool:
-    """永久刪除需求單與其事件紀錄；找不到編號時回傳 False。"""
+    """永久刪除詢問單與其事件紀錄；找不到編號時回傳 False。"""
     with _connect() as db:
         if not db.execute("SELECT 1 FROM tickets WHERE ticket_no=?", (ticket_no,)).fetchone():
             return False
@@ -198,7 +198,7 @@ def record_student_email(ticket_no: str, sent: bool, detail: str, recipient: str
 
 def record_knowledge_sync(ticket_no: str, saved: bool, detail: str) -> None:
     with _connect() as db:
-        message = f"已將本需求單 Q&A 寫入知識庫（{detail}）" if saved else f"知識庫寫入失敗：{detail[:300]}"
+        message = f"已將本詢問單 Q&A 寫入知識庫（{detail}）" if saved else f"知識庫寫入失敗：{detail[:300]}"
         db.execute("INSERT INTO ticket_events(ticket_no,event_type,actor,message) VALUES(?,?,?,?)",
                    (ticket_no, "knowledge", "系統", message))
 

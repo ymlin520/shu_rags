@@ -17,12 +17,12 @@ def _record(ticket: dict) -> dict[str, str]:
     answer = str(ticket.get("resolution") or "").replace(FAQ_MARKER, "").strip()
     question = str(ticket.get("query") or ticket.get("subject") or "").strip()
     if ticket.get("status") != "已解決" or not question or not answer:
-        raise ValueError("只有包含完整問題與回答的已解決需求單才能加入知識庫")
+        raise ValueError("只有包含完整問題與回答的已解決詢問單才能加入知識庫")
     office = str(ticket.get("office") or "承辦處室").strip()
-    category = str(ticket.get("category") or "需求單回覆").strip()
+    category = str(ticket.get("category") or "詢問單回覆").strip()
     return {
         "id": f"TICKET-{ticket['ticket_no']}", "category": category, "question": question,
-        "answer": answer, "url": "", "keywords": f"{category} {office} 需求單回覆 已解決",
+        "answer": answer, "url": "", "keywords": f"{category} {office} 詢問單回覆 已解決",
         "office": office, "email": "",
     }
 

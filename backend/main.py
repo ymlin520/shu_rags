@@ -75,6 +75,12 @@ def ticket_page(ticket_no: str) -> FileResponse:
     return FileResponse(frontend / "ticket.html")
 
 
+@app.get("/guide", include_in_schema=False)
+def guide_page() -> FileResponse:
+    """給學生與處室承辦人看的使用說明（截圖放在 frontend/guide/）。"""
+    return FileResponse(frontend / "guide.html", headers={"Cache-Control": "no-cache"})
+
+
 @app.get("/design", include_in_schema=False)
 def design_page() -> FileResponse:
     """外觀 / 文案管理後台。"""
@@ -318,7 +324,7 @@ def _sync_ticket_knowledge(ticket: dict) -> None:
         record = sync_resolved_ticket(ticket)
         record_knowledge_sync(ticket["ticket_no"], True, record["id"])
     except Exception as exc:
-        logger.exception("需求單寫入知識庫失敗 ticket=%s", ticket.get("ticket_no"))
+        logger.exception("詢問單寫入知識庫失敗 ticket=%s", ticket.get("ticket_no"))
         record_knowledge_sync(ticket["ticket_no"], False, f"{type(exc).__name__}: {exc}")
 
 
@@ -348,7 +354,7 @@ def email_settings_save(request: MailSettingsRequest, x_admin_token: str = Heade
         save_password(password)
     if offices:
         save_office_emails(offices)
-    logger.info("更新需求單通知信箱設定 offices=%d", len(offices))
+    logger.info("更新詢問單通知信箱設定 offices=%d", len(offices))
     return mail_status()
 
 
@@ -366,7 +372,7 @@ def ticket_resend_mail(ticket_no: str, x_admin_token: str = Header(default="")):
     require_admin(x_admin_token)
     ticket = ticket_detail(ticket_no)
     if not ticket:
-        raise HTTPException(status_code=404, detail="找不到需求單")
+        raise HTTPException(status_code=404, detail="找不到詢問單")
     sent, detail = send_ticket_email(ticket)
     record_ticket_email(ticket_no, sent, detail)
     if not sent:
@@ -387,14 +393,14 @@ def ticket_create(request: TicketCreateRequest, background_tasks: BackgroundTask
 @app.get("/api/tickets/{ticket_no}")
 def ticket_public_get(ticket_no: str, key: str):
     ticket = public_ticket(ticket_no, key)
-    if not ticket: raise HTTPException(status_code=404, detail="找不到需求單或存取碼不正確")
+    if not ticket: raise HTTPException(status_code=404, detail="找不到詢問單或存取碼不正確")
     return ticket
 
 
 @app.post("/api/tickets/{ticket_no}/replies")
 def ticket_public_reply(ticket_no: str, request: TicketReplyRequest):
     ticket = add_ticket_reply(ticket_no, request.access_key, request.message, request.allow_faq)
-    if not ticket: raise HTTPException(status_code=404, detail="找不到需求單或存取碼不正確")
+    if not ticket: raise HTTPException(status_code=404, detail="找不到詢問單或存取碼不正確")
     return ticket
 
 
@@ -404,7 +410,7 @@ def ticket_public_rate(ticket_no: str, request: TicketRateRequest):
         ticket = rate_ticket(ticket_no, request.access_key, request.rating, request.comment)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    if not ticket: raise HTTPException(status_code=404, detail="找不到需求單或存取碼不正確")
+    if not ticket: raise HTTPException(status_code=404, detail="找不到詢問單或存取碼不正確")
     logger.info("提問單評分 ticket=%s rating=%d", ticket_no, request.rating)
     return ticket
 
@@ -436,7 +442,7 @@ def office_mail_save(request: OfficeMailRequest, x_office_token: str = Header(de
     if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
         raise HTTPException(status_code=422, detail="請輸入有效的電子郵件地址")
     save_office_emails({office: email})
-    logger.info("處室自行更新需求單通知信箱 office=%s", office)
+    logger.info("處室自行更新詢問單通知信箱 office=%s", office)
     return {"saved": True, "office": office, "email": email}
 
 
@@ -444,7 +450,7 @@ def office_mail_save(request: OfficeMailRequest, x_office_token: str = Header(de
 def office_ticket_get(ticket_no: str, x_office_token: str = Header(default="")):
     office = require_office(x_office_token)
     rows = [x for x in list_tickets(office=office) if x["ticket_no"] == ticket_no]
-    if not rows: raise HTTPException(status_code=404, detail="找不到分派給本處室的需求單")
+    if not rows: raise HTTPException(status_code=404, detail="找不到分派給本處室的詢問單")
     return ticket_detail(ticket_no)
 
 
@@ -453,7 +459,7 @@ def office_ticket_update(ticket_no: str, request: TicketUpdateRequest, backgroun
                          x_office_token: str = Header(default="")):
     office = require_office(x_office_token)
     rows = [x for x in list_tickets(office=office) if x["ticket_no"] == ticket_no]
-    if not rows: raise HTTPException(status_code=404, detail="找不到分派給本處室的需求單")
+    if not rows: raise HTTPException(status_code=404, detail="找不到分派給本處室的詢問單")
     previous_office = rows[0]["office"]
     data = request.model_dump()
     ticket = update_ticket(ticket_no, data)
@@ -472,7 +478,7 @@ def ticket_update(ticket_no: str, request: TicketUpdateRequest, background_tasks
     previous = ticket_detail(ticket_no)
     ticket = update_ticket(ticket_no, request.model_dump())
     if not ticket:
-        raise HTTPException(status_code=404, detail="找不到需求單")
+        raise HTTPException(status_code=404, detail="找不到詢問單")
     if previous and ticket["office"] != previous["office"]:
         background_tasks.add_task(_notify_ticket, ticket)
     if previous and ticket["status"] == "已解決" and previous["status"] != "已解決":
@@ -483,10 +489,10 @@ def ticket_update(ticket_no: str, request: TicketUpdateRequest, background_tasks
 
 @app.delete("/api/admin/tickets/{ticket_no}")
 def ticket_delete(ticket_no: str, x_admin_token: str = Header(default="")):
-    """永久刪除需求單；問題、回覆、Email 與事件紀錄一併移除，無法復原。"""
+    """永久刪除詢問單；問題、回覆、Email 與事件紀錄一併移除，無法復原。"""
     require_admin(x_admin_token)
     if not delete_ticket(ticket_no):
-        raise HTTPException(status_code=404, detail="找不到需求單")
+        raise HTTPException(status_code=404, detail="找不到詢問單")
     return {"deleted": True, "ticket_no": ticket_no}
 
 

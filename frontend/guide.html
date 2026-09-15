@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>世新 AI FAQ 使用說明</title>
+<style>
+:root{
+  --ground:#eef1f5; --paper:#fffdfa; --ink:#1f2a30; --muted:#5b666d; --line:#d5dce2; --soft:#f3f6f8;
+  --teal:#0e6a73; --teal-soft:#e2f0f1; --accent:#e6532d; --accent-ink:#b5401f;
+  --tip:#8a5a00; --tip-bg:#fff4e2;
+  --sans:"Microsoft JhengHei","PingFang TC","Noto Sans TC",system-ui,sans-serif;
+  --mono:Consolas,ui-monospace,"Courier New",monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#12171b; --paper:#1a2025; --ink:#e7ecef; --muted:#9fabb2; --line:#323b42; --soft:#212930;
+    --teal:#6cc3cb; --teal-soft:#16333a; --accent:#f07550; --accent-ink:#f5946f;
+    --tip:#e8b35a; --tip-bg:#33291a;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#12171b; --paper:#1a2025; --ink:#e7ecef; --muted:#9fabb2; --line:#323b42; --soft:#212930;
+  --teal:#6cc3cb; --teal-soft:#16333a; --accent:#f07550; --accent-ink:#f5946f;
+  --tip:#e8b35a; --tip-bg:#33291a;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.8}
+a{color:var(--accent-ink)}
+a:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.sheet{max-width:900px;margin:28px auto;background:var(--paper);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.cover{background:#0e6a73;color:#fff;padding:30px 44px 30px;display:grid;gap:10px}
+.cover .eyebrow{margin:0;font-size:13px;letter-spacing:.1em;opacity:.85}
+.cover h1{margin:0;font-size:32px;line-height:1.3;text-wrap:balance}
+.cover p{margin:0;max-width:60ch;opacity:.93}
+.body{padding:10px 44px 44px}
+.toc{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:26px 0 8px;padding:0;list-style:none}
+.toc a{border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:grid;gap:2px;color:var(--ink);text-decoration:none;height:100%}
+.toc a:hover{border-color:var(--accent)}
+.toc b{font-size:15px}
+.toc small{color:var(--muted);font-size:13px}
+.who{font-size:12px;font-weight:700;letter-spacing:.06em;color:var(--teal)}
+.part{margin-top:44px;padding-top:26px;border-top:2px solid var(--ink);scroll-margin-top:16px}
+.part > .who{display:block;margin-bottom:4px}
+h2{font-size:24px;margin:0 0 6px;text-wrap:balance}
+.part > p.lead{margin:0 0 18px;color:var(--muted);max-width:64ch}
+ol.steps{list-style:none;margin:0;padding:0;counter-reset:step;display:grid;gap:28px}
+ol.steps > li{counter-increment:step;display:grid;grid-template-columns:36px 1fr;gap:4px 14px}
+ol.steps > li::before{content:counter(step);grid-row:span 3;width:32px;height:32px;border-radius:50%;background:var(--accent);color:#fff;font-weight:700;display:grid;place-items:center;font-size:15px;margin-top:2px}
+ol.steps h3{margin:0;font-size:18px;line-height:1.5}
+ol.steps .text p{margin:4px 0 0;max-width:66ch}
+figure{margin:14px 0 0;grid-column:2}
+figure img{display:block;width:100%;height:auto;border:1px solid var(--line);border-radius:10px;background:var(--soft)}
+figure.narrow img{max-width:360px}
+figure.mail img{max-width:620px}
+figcaption{margin-top:6px;font-size:13px;color:var(--muted)}
+.tip{grid-column:2;margin-top:12px;background:var(--tip-bg);border-radius:10px;padding:12px 16px;font-size:14.5px}
+.tip b{color:var(--tip)}
+.tip p{margin:0}
+.tip p + p{margin-top:6px}
+.btn{display:inline-block;font-size:14px;font-weight:700;border-radius:7px;padding:0 8px;background:var(--accent);color:#fff;white-space:nowrap;line-height:1.7}
+.mono{font-family:var(--mono);font-size:14px;background:var(--soft);border:1px solid var(--line);border-radius:5px;padding:0 5px;white-space:nowrap}
+.flow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0 22px;font-size:14.5px}
+.flow span{background:var(--teal-soft);color:var(--teal);border-radius:999px;padding:3px 12px;font-weight:700}
+.flow i{font-style:normal;color:var(--muted)}
+dl.faq{margin:0;display:grid;gap:16px}
+dl.faq dt{font-weight:700}
+dl.faq dd{margin:2px 0 0;max-width:68ch}
+footer{margin-top:40px;padding-top:14px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
+@media (max-width:680px){
+  .sheet{margin:0;border-radius:0;border-left:0;border-right:0}
+  .cover{padding:24px 20px}
+  .cover h1{font-size:26px}
+  .body{padding:8px 20px 32px}
+  .toc{grid-template-columns:1fr}
+  ol.steps > li{grid-template-columns:30px 1fr;gap:4px 10px}
+  ol.steps > li::before{width:28px;height:28px;font-size:14px}
+}
+@media print{
+  body{background:#fff}
+  .sheet{margin:0;border:0;border-radius:0;max-width:none}
+  .part{break-before:page;border-top:0;padding-top:0}
+  ol.steps > li,figure,.tip{break-inside:avoid}
+  .cover,.btn,ol.steps > li::before{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+@page{size:A4;margin:14mm 12mm}
+</style>
+</head>
+<body>
+<main class="sheet">
+  <header class="cover">
+    <p class="eyebrow">世新大學校務問答 · 使用說明</p>
+    <h1>世新 AI FAQ 使用說明</h1>
+    <p>把校務問題打在網站上，AI 會從各處室整理的常見問題中找答案。查不到的問題可以一鍵送出「詢問單」，系統會自動交給負責的處室回覆。</p>
+  </header>
+
+  <div class="body">
+    <ul class="toc">
+      <li><a href="#ask"><span class="who">所有使用者</span><b>一、怎麼問問題</b><small>輸入問題、看懂 AI 的回答</small></a></li>
+      <li><a href="#inquiry"><span class="who">所有使用者</span><b>二、查不到答案：提交詢問單</b><small>送出後由處室回覆到你的信箱</small></a></li>
+      <li><a href="#office"><span class="who">處室承辦人</span><b>三、收到詢問單後怎麼處理</b><small>收信、登入、回覆學生</small></a></li>
+      <li><a href="#transfer"><span class="who">處室承辦人</span><b>四、不是我們的業務：轉單</b><small>轉給正確的處室</small></a></li>
+    </ul>
+
+    <section class="part" id="ask">
+      <span class="who">所有使用者</span>
+      <h2>一、怎麼問問題</h2>
+      <p class="lead">不需要登入，打開網站就能直接問。</p>
+      <ol class="steps">
+        <li>
+          <div class="text"><h3>打開網站</h3><p>用電腦或手機瀏覽器打開 <span class="mono">ai-faq.shu.edu.tw</span>。左邊是「常見問題分類」，中間是對話區，最下面是輸入框。</p></div>
+          <figure><img src="/static/guide/01-home.jpg" alt="世新 AI FAQ 首頁：左側分類、中間歡迎訊息、下方輸入框"><figcaption>首頁。第一次來可以先點中間的建議按鈕（例如「最低修課學分」）試試看。</figcaption></figure>
+        </li>
+        <li>
+          <div class="text"><h3>輸入問題，按「送出」</h3><p>在最下面的輸入框用平常說話的方式打出問題，按 <span class="btn">送出</span> 或鍵盤 Enter。也可以點左邊的分類，從列出的常見問題裡直接點選。</p></div>
+        </li>
+        <li>
+          <div class="text"><h3>看 AI 的回答</h3><p>AI 會整理出一段回答。想看回答根據哪幾題 FAQ，點下方的「查看參考 FAQ」展開。</p></div>
+          <figure><img src="/static/guide/02-answer.jpg" alt="AI 回答最低修課學分的畫面，下方有查看參考 FAQ" loading="lazy"><figcaption>「AI 整理」代表這段是 AI 依 FAQ 整理的；展開「查看參考 FAQ」可看到原文和相符程度。</figcaption></figure>
+          <div class="tip"><p><b>小提醒</b>　回答僅供參考，重要規定仍以學校最新公告為準。問過的問題會記在左邊「之前的對話」，點一下就能再看。</p></div>
+        </li>
+      </ol>
+    </section>
+
+    <section class="part" id="inquiry">
+      <span class="who">所有使用者</span>
+      <h2>二、查不到答案：提交詢問單</h2>
+      <p class="lead">知識庫裡沒有的問題，可以交給處室的承辦人直接回覆你。整個流程如下：</p>
+      <div class="flow"><span>你送出詢問單</span><i>→</i><span>AI 判斷該給哪個處室</span><i>→</i><span>處室收到通知信並回覆</span><i>→</i><span>你收到回覆信</span></div>
+      <ol class="steps">
+        <li>
+          <div class="text"><h3>看到「知識庫沒有這個問題」</h3><p>AI 找不到答案時，會出現一張粉紅色的提示卡。確認要請處室回答，就按 <span class="btn">確認提出詢問單 →</span>。</p></div>
+          <figure><img src="/static/guide/03-no-answer.jpg" alt="AI 回覆目前知識庫沒有這個問題，下方有確認提出詢問單按鈕" loading="lazy"><figcaption>範例：問「停車證如何申請？」時，知識庫還沒有這題。</figcaption></figure>
+        </li>
+        <li>
+          <div class="text"><h3>填寫你的 Email</h3><p>跳出的視窗請填你的電子郵件（建議用學校信箱），處室回覆後會寄到這裡。填好按 <span class="btn">送出詢問單 →</span>。</p></div>
+          <figure><img src="/static/guide/04-email.jpg" alt="請先填寫 Email 視窗，有電子郵件欄位與送出詢問單按鈕" loading="lazy"><figcaption>Email 要填對，否則收不到回覆。</figcaption></figure>
+        </li>
+        <li>
+          <div class="text"><h3>看到「✓ 已提交」就完成了</h3><p>不用選處室，AI 會依問題內容自動送到負責的單位。</p></div>
+          <figure><img src="/static/guide/05-submitted.jpg" alt="提示卡變成已提交，問題已交由承辦處室處理" loading="lazy"><figcaption>送出後提示卡會變成「✓ 已提交」。</figcaption></figure>
+        </li>
+        <li>
+          <div class="text"><h3>收到回覆信，順手評分</h3><p>處室回覆後，你會收到主旨寫著「處室已回覆，請為服務評分」的信，裡面有問題與處室的回答。點信裡的星星或按鈕，就能替這次服務打 1～5 顆星。</p></div>
+          <div class="tip"><p><b>小提醒</b>　沒收到信的話，先看看垃圾郵件匣。</p></div>
+        </li>
+      </ol>
+    </section>
+
+    <section class="part" id="office">
+      <span class="who">處室承辦人</span>
+      <h2>三、收到詢問單後怎麼處理</h2>
+      <p class="lead">學生送出的詢問單，會依 AI 判斷寄到各處室的通知信箱。以下處室畫面使用範例資料示意。</p>
+      <ol class="steps">
+        <li>
+          <div class="text"><h3>收到通知信</h3><p>信件主旨是「[校務AI系統 單號] 學生的問題」，內容有單號、學生的問題和聯絡 Email，以及本處室的後台連結和專屬登入碼。</p></div>
+          <figure class="mail"><img src="/static/guide/00-mail.jpg?v=2" alt="處室收到的通知信範例，包含詢問單編號、問題與開啟詢問單並回覆按鈕" loading="lazy"><figcaption>範例信件。實際信件會顯示本處室的專屬登入碼，請勿轉寄給他人。</figcaption></figure>
+        </li>
+        <li>
+          <div class="text"><h3>點「開啟詢問單並回覆 →」，輸入處室登入碼</h3><p>第一次開啟會先看到登入畫面，輸入信裡的「該處室專屬密碼」後按 <span class="btn">登入</span>。同一台電腦登入過一次，之後會記住。也可以直接打開 <a href="/office" class="mono">ai-faq.shu.edu.tw/office</a> 登入。</p></div>
+          <figure><img src="/static/guide/06-office-login.jpg?v=2" alt="處室承辦人登入畫面，輸入處室登入碼" loading="lazy"><figcaption>處室承辦人登入畫面。</figcaption></figure>
+        </li>
+        <li>
+          <div class="text"><h3>在清單中找到這張單</h3><p>登入後會看到分派給本處室的所有單。上方可以依「待處理／處理中／已解決」篩選，點右邊的 <b>開啟回覆 →</b> 進入這張單。</p></div>
+          <figure><img src="/static/guide/07-office-queue.jpg?v=2" alt="處室回覆清單，列出詢問單編號、問題與狀態" loading="lazy"><figcaption>範例畫面。「詢問單通知信箱」可以改成本處室實際要收信的信箱，改完按「儲存信箱」。</figcaption></figure>
+        </li>
+        <li>
+          <div class="text"><h3>寫回覆，按「送出回覆」</h3><p>左邊是學生的問題，在「回覆內容」寫下要給學生的答案，按 <span class="btn">送出回覆</span>。送出後這張單會變成「已解決」，系統會自動把你的回覆寄給學生。</p></div>
+          <figure><img src="/static/guide/08-office-ticket.jpg?v=2" alt="詢問單回覆頁：左側提問內容與回覆框，右側轉單區與處理紀錄" loading="lazy"><figcaption>範例畫面。右側的「處理紀錄」會記下建立、寄信、轉單等每一個動作。</figcaption></figure>
+          <div class="tip"><p><b>小提醒</b>　回覆會原文寄給學生，請用完整的句子寫清楚辦理方式、地點或聯絡分機。</p><p>如果這題以後別人也可能問，勾選「將本次回答列為知識庫整理候選」，之後就能整理成正式的 FAQ。</p></div>
+        </li>
+      </ol>
+    </section>
+
+    <section class="part" id="transfer">
+      <span class="who">處室承辦人</span>
+      <h2>四、不是我們的業務：轉單</h2>
+      <p class="lead">AI 偶爾會分錯處室。這時不用回覆，直接轉給正確的單位就好。</p>
+      <ol class="steps">
+        <li>
+          <div class="text"><h3>在單子右上方找到「這題不屬於本單位？」</h3><p>在「轉給」選單選正確的處室，「轉單原因」簡單寫一句，讓對方知道為什麼轉過去。</p></div>
+          <figure class="narrow"><img src="/static/guide/09-transfer.jpg?v=2" alt="轉單區塊：選擇轉給哪個處室、填寫轉單原因、確認轉出按鈕" loading="lazy"><figcaption>範例：把學籍相關的問題轉給教務處註冊組。</figcaption></figure>
+        </li>
+        <li>
+          <div class="text"><h3>按「確認轉出」</h3><p>畫面會提示「詢問單已轉出」並回到清單，這張單會從本處室的清單中移除。</p></div>
+        </li>
+        <li>
+          <div class="text"><h3>新處室會自動收到通知信</h3><p>接手的處室會收到一封新的通知信，處理紀錄也會留下轉單原因，不需要另外寫信通知。</p></div>
+          <div class="tip"><p><b>小提醒</b>　不確定該給誰時，可以選「其他行政單位」。不能轉給本處室自己，系統會要求你選別的處室。</p></div>
+        </li>
+      </ol>
+    </section>
+
+    <section class="part" id="faq">
+      <span class="who">常見問題</span>
+      <h2>遇到狀況怎麼辦</h2>
+      <dl class="faq">
+        <dt>忘記處室登入碼？</dt>
+        <dd>每封通知信裡都有本處室的專屬登入碼；找不到的話，請洽系統管理員。</dd>
+        <dt>處室沒收到通知信？</dt>
+        <dd>先檢查垃圾郵件匣。再登入處室後台，確認「詢問單通知信箱」填的是正確的信箱。</dd>
+        <dt>學生說沒收到回覆？</dt>
+        <dd>請學生檢查垃圾郵件匣，也確認送出詢問單時填的 Email 是否正確。</dd>
+      </dl>
+    </section>
+
+    <footer>世新大學校務問答 AI FAQ · 處室畫面中的單號、問題與回覆內容皆為範例。</footer>
+  </div>
+</main>
+</body>
+</html>

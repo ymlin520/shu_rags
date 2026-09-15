@@ -203,17 +203,17 @@ def send_ticket_email(ticket: dict) -> tuple[bool, str]:
     message["To"] = recipient
     message["Reply-To"] = settings["username"]
     message.set_content(
-        f"您好：\n\nAI 已將下列需求單分派至「{ticket['office']}」，請協助回覆。\n\n"
-        f"需求單編號：{ticket['ticket_no']}\n"
+        f"您好：\n\nAI 已將下列詢問單分派至「{ticket['office']}」，請協助回覆。\n\n"
+        f"詢問單編號：{ticket['ticket_no']}\n"
         f"建立時間：{ticket.get('created_at', '')}\n"
         f"分類：{ticket.get('category', '')}\n"
         f"申請人：{ticket.get('requester_name', '')}（{ticket.get('requester_contact', '')}）\n\n"
         f"── 問題 ──\n{ticket['query']}\n\n"
         f"── 問題說明 ──\n{ticket['description']}\n\n"
-        f"── 需求單連結 ──\n{office_link}\n\n"
+        f"── 詢問單連結 ──\n{office_link}\n\n"
         f"── 處室後台 ──\n{office_home}\n"
         f"該處室專屬密碼：{login_code or '請洽系統管理者'}\n\n"
-        f"登入後即可查看及回覆需求單；回覆內容會直接顯示給提問學生。\n"
+        f"登入後即可查看及回覆詢問單；回覆內容會直接顯示給提問學生。\n"
     )
     safe_office = escape(str(ticket["office"]))
     safe_ticket_no = escape(str(ticket["ticket_no"]))
@@ -223,18 +223,18 @@ def send_ticket_email(ticket: dict) -> tuple[bool, str]:
     safe_login_code = escape(login_code or "請洽系統管理者")
     message.add_alternative(
         "<div style=\"font-family:'Noto Sans TC',Arial,sans-serif;font-size:15px;color:#1f2933;line-height:1.7\">"
-        f"<p>您好：</p><p>AI 已將下列需求單分派至「<strong>{safe_office}</strong>」，請協助回覆。</p>"
+        f"<p>您好：</p><p>AI 已將下列詢問單分派至「<strong>{safe_office}</strong>」，請協助回覆。</p>"
         "<table style=\"border-collapse:collapse;margin:16px 0\">"
-        f"<tr><td style=\"padding:4px 12px 4px 0;color:#6b7280\">需求單編號</td><td><strong>{safe_ticket_no}</strong></td></tr>"
+        f"<tr><td style=\"padding:4px 12px 4px 0;color:#6b7280\">詢問單編號</td><td><strong>{safe_ticket_no}</strong></td></tr>"
         f"<tr><td style=\"padding:4px 12px 4px 0;color:#6b7280\">建立時間</td><td>{ticket.get('created_at', '')}</td></tr>"
         f"<tr><td style=\"padding:4px 12px 4px 0;color:#6b7280\">分類</td><td>{ticket.get('category', '')}</td></tr>"
         f"<tr><td style=\"padding:4px 12px 4px 0;color:#6b7280\">申請人</td><td>{ticket.get('requester_name', '')}（{ticket.get('requester_contact', '')}）</td></tr>"
         "</table>"
         f"<h3 style=\"margin:20px 0 6px\">問題</h3><p>{safe_query}</p>"
         f"<h3 style=\"margin:20px 0 6px\">問題說明</h3><p>{safe_description}</p>"
-        f"<p style=\"margin:24px 0\"><a href=\"{office_link}\" style=\"background:#2563eb;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none\">開啟需求單並回覆 →</a></p>"
+        f"<p style=\"margin:24px 0\"><a href=\"{office_link}\" style=\"background:#2563eb;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none\">開啟詢問單並回覆 →</a></p>"
         f"<div style=\"border:1px solid #d7dce2;background:#f5f7fa;border-radius:10px;padding:14px 16px;margin:18px 0\"><strong>處室登入資訊</strong><p style=\"margin:8px 0 0\">後台連結：<a href=\"{office_home}\">{office_home}</a><br>該處室專屬密碼：<code style=\"font-size:15px;font-weight:700\">{safe_login_code}</code></p></div>"
-        f"<p style=\"color:#6b7280;font-size:13px\">若按鈕無法開啟，請複製此連結：<br>{office_link}<br>登入後即可查看及回覆需求單；回覆內容會直接顯示給提問學生。</p></div>",
+        f"<p style=\"color:#6b7280;font-size:13px\">若按鈕無法開啟，請複製此連結：<br>{office_link}<br>登入後即可查看及回覆詢問單；回覆內容會直接顯示給提問學生。</p></div>",
         subtype="html",
     )
     try:
@@ -266,7 +266,7 @@ def send_student_resolution_email(ticket: dict) -> tuple[bool, str, str]:
         return False, "尚未設定寄件帳號或應用程式密碼", recipient
     access_key = str(ticket.get("access_key") or "").strip()
     if not access_key:
-        return False, "需求單缺少學生存取碼", recipient
+        return False, "詢問單缺少學生存取碼", recipient
     ticket_link = f"{base_url()}/ticket/{ticket['ticket_no']}?key={access_key}"
     question = str(ticket.get("query") or ticket.get("subject") or "")
     answer = str(ticket.get("resolution") or "")
@@ -276,8 +276,8 @@ def send_student_resolution_email(ticket: dict) -> tuple[bool, str, str]:
     message["To"] = recipient
     message["Reply-To"] = settings["username"]
     message.set_content(
-        f"您好：\n\n您的需求單已由「{ticket['office']}」回覆並結案。\n\n"
-        f"需求單編號：{ticket['ticket_no']}\n\n【Q 問題】\n{question}\n\n【A 處室回覆】\n{answer}\n\n"
+        f"您好：\n\n您的詢問單已由「{ticket['office']}」回覆並結案。\n\n"
+        f"詢問單編號：{ticket['ticket_no']}\n\n【Q 問題】\n{question}\n\n【A 處室回覆】\n{answer}\n\n"
         f"請開啟下列連結查看 Q&A 並評分 1～5 顆星：\n{ticket_link}#rate-card\n"
     )
     safe_office = escape(str(ticket["office"]))
@@ -290,10 +290,10 @@ def send_student_resolution_email(ticket: dict) -> tuple[bool, str, str]:
     )
     message.add_alternative(
         "<div style=\"font-family:'Noto Sans TC',Arial,sans-serif;font-size:15px;color:#1f2933;line-height:1.7;max-width:680px\">"
-        f"<p>您好：</p><p>您的需求單 <strong>{safe_no}</strong> 已由「<strong>{safe_office}</strong>」回覆並結案。</p>"
+        f"<p>您好：</p><p>您的詢問單 <strong>{safe_no}</strong> 已由「<strong>{safe_office}</strong>」回覆並結案。</p>"
         f"<div style=\"border:1px solid #ddd;border-radius:10px;padding:16px;margin:18px 0\"><strong>Q．問題</strong><p>{safe_q}</p><hr style=\"border:0;border-top:1px solid #eee\"><strong>A．處室回覆</strong><p>{safe_a}</p></div>"
         f"<p><strong>請為本次服務評分：</strong></p><div>{star_links}</div>"
-        f"<p style=\"margin:24px 0\"><a href=\"{ticket_link}#rate-card\" style=\"background:#e6532d;color:#fff;padding:11px 18px;border-radius:8px;text-decoration:none\">開啟需求單、查看 Q&A 並評分 →</a></p>"
+        f"<p style=\"margin:24px 0\"><a href=\"{ticket_link}#rate-card\" style=\"background:#e6532d;color:#fff;padding:11px 18px;border-radius:8px;text-decoration:none\">開啟詢問單、查看 Q&A 並評分 →</a></p>"
         f"<p style=\"color:#6b7280;font-size:13px\">若按鈕無法開啟，請複製此連結：<br>{ticket_link}</p></div>",
         subtype="html",
     )
@@ -315,7 +315,7 @@ def send_test_email(recipient: str) -> tuple[bool, str]:
     message["To"] = recipient
     message.set_content(
         f"這是{_subject_tag(settings)}的寄信測試。\n\n"
-        f"收到本信表示 SMTP 設定正確，之後學生送出的需求單會自動寄到各處室設定的信箱。\n"
+        f"收到本信表示 SMTP 設定正確，之後學生送出的詢問單會自動寄到各處室設定的信箱。\n"
         f"系統網址：{base_url()}\n"
     )
     try:
