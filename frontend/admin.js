@@ -1,5 +1,5 @@
 const $=s=>document.querySelector(s);const ADMIN_TOKEN_KEY='school-faq-admin-token';let token=localStorage.getItem(ADMIN_TOKEN_KEY)||'',statusFilter='',tickets=[],current='',mailInfo={offices:{}};
-const OFFICES=['教務處註冊組','教務處課務組','學務處生活輔導組','學務處住宿服務組','國際處','總務處','資訊處','圖資處','系辦公室','其他行政單位'];
+const OFFICES=['教務處招生組','教務處註冊課務組','學務處生活輔導組','學務處住宿服務組','兩岸事務中心','國際事務中心','總務處','圖資處','系辦公室','其他行政單位'];
 const esc=v=>{const n=document.createElement('div');n.textContent=v??'';return n.innerHTML};const headers=()=>({'X-Admin-Token':token});
 const officeLabel=document.createElement('label');officeLabel.innerHTML=`轉派／主管單位<select id="update-office">${OFFICES.map(x=>`<option>${x}</option>`).join('')}</select>`;$('#update-status').closest('label').before(officeLabel);
 const hours=v=>`${(Number(v)||0).toFixed(1)} 小時`;

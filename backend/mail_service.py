@@ -7,11 +7,12 @@ from html import escape
 from email.message import EmailMessage
 from pathlib import Path
 
+from . import theme_service
 from .config import PROJECT_ROOT
 
 DEFAULT_EMAIL = os.getenv("FAQ_DEFAULT_EMAIL", "admin@example.edu.tw")
-OFFICES = ["教務處註冊組", "教務處課務組", "學務處生活輔導組", "學務處住宿服務組", "國際處",
-           "總務處", "資訊處", "圖資處", "系辦公室", "其他行政單位"]
+OFFICES = ["教務處招生組", "教務處註冊課務組", "學務處生活輔導組", "學務處住宿服務組", "兩岸事務中心", "國際事務中心",
+           "總務處", "圖資處", "系辦公室", "其他行政單位"]
 DEFAULT_SETTINGS = {"server": "smtp.gmail.com", "port": 587, "username": "", "from_name": "校務AI系統",
                     "subject_tag": "校務AI系統",
                     "method": "", "use_tls": True, "require_auth": True,
@@ -178,6 +179,18 @@ def _send(message: EmailMessage) -> None:
         smtp.send_message(message)
 
 
+def _mail_text(key: str, tokens: dict[str, str] | None = None) -> str:
+    """信件文字取自外觀後台 /design 的文案設定，留空時用內建預設值。"""
+    try:
+        value = str(theme_service.load_config()["text"].get(key) or "").strip()
+    except Exception:
+        value = ""
+    value = value or theme_service.DEFAULT_TEXT.get(key, "")
+    for name, replacement in (tokens or {}).items():
+        value = value.replace("{" + name + "}", str(replacement))
+    return value
+
+
 def _subject_tag(settings: dict) -> str:
     """後台可自訂的信件主旨標題；未填寫時沿用寄件人顯示名稱。"""
     return (str(settings.get("subject_tag") or "").strip()
@@ -197,23 +210,31 @@ def send_ticket_email(ticket: dict) -> tuple[bool, str]:
     office_link = f"{base_url()}/office/ticket/{ticket['ticket_no']}"
     office_home = f"{base_url()}/office"
     login_code = office_login_code(ticket["office"])
+    tokens = {"處室": str(ticket.get("office") or ""), "單號": str(ticket.get("ticket_no") or "")}
+    intro_text = _mail_text("mail_office_intro", tokens)
+    question_title = _mail_text("mail_office_question_title", tokens)
+    desc_title = _mail_text("mail_office_desc_title", tokens)
+    button_text = _mail_text("mail_office_button", tokens)
+    login_title = _mail_text("mail_office_login_title", tokens)
+    code_label = _mail_text("mail_office_code_label", tokens)
+    footer_text = _mail_text("mail_office_footer", tokens)
     message = EmailMessage()
     message["Subject"] = f"[{_subject_tag(settings)} {ticket['ticket_no']}] {ticket['subject']}"
     message["From"] = _from_header(settings)
     message["To"] = recipient
     message["Reply-To"] = settings["username"]
     message.set_content(
-        f"您好：\n\nAI 已將下列詢問單分派至「{ticket['office']}」，請協助回覆。\n\n"
+        f"您好：\n\n{intro_text}\n\n"
         f"詢問單編號：{ticket['ticket_no']}\n"
         f"建立時間：{ticket.get('created_at', '')}\n"
         f"分類：{ticket.get('category', '')}\n"
         f"申請人：{ticket.get('requester_name', '')}（{ticket.get('requester_contact', '')}）\n\n"
-        f"── 問題 ──\n{ticket['query']}\n\n"
-        f"── 問題說明 ──\n{ticket['description']}\n\n"
+        f"── {question_title} ──\n{ticket['query']}\n\n"
+        f"── {desc_title} ──\n{ticket['description']}\n\n"
         f"── 詢問單連結 ──\n{office_link}\n\n"
         f"── 處室後台 ──\n{office_home}\n"
-        f"該處室專屬密碼：{login_code or '請洽系統管理者'}\n\n"
-        f"登入後即可查看及回覆詢問單；回覆內容會直接顯示給提問學生。\n"
+        f"{code_label}：{login_code or '請洽系統管理者'}\n\n"
+        f"{footer_text}\n"
     )
     safe_office = escape(str(ticket["office"]))
     safe_ticket_no = escape(str(ticket["ticket_no"]))
@@ -223,18 +244,18 @@ def send_ticket_email(ticket: dict) -> tuple[bool, str]:
     safe_login_code = escape(login_code or "請洽系統管理者")
     message.add_alternative(
         "<div style=\"font-family:'Noto Sans TC',Arial,sans-serif;font-size:15px;color:#1f2933;line-height:1.7\">"
-        f"<p>您好：</p><p>AI 已將下列詢問單分派至「<strong>{safe_office}</strong>」，請協助回覆。</p>"
+        f"<p>您好：</p><p>{escape(intro_text)}</p>"
         "<table style=\"border-collapse:collapse;margin:16px 0\">"
         f"<tr><td style=\"padding:4px 12px 4px 0;color:#6b7280\">詢問單編號</td><td><strong>{safe_ticket_no}</strong></td></tr>"
         f"<tr><td style=\"padding:4px 12px 4px 0;color:#6b7280\">建立時間</td><td>{ticket.get('created_at', '')}</td></tr>"
         f"<tr><td style=\"padding:4px 12px 4px 0;color:#6b7280\">分類</td><td>{ticket.get('category', '')}</td></tr>"
         f"<tr><td style=\"padding:4px 12px 4px 0;color:#6b7280\">申請人</td><td>{ticket.get('requester_name', '')}（{ticket.get('requester_contact', '')}）</td></tr>"
         "</table>"
-        f"<h3 style=\"margin:20px 0 6px\">問題</h3><p>{safe_query}</p>"
-        f"<h3 style=\"margin:20px 0 6px\">問題說明</h3><p>{safe_description}</p>"
-        f"<p style=\"margin:24px 0\"><a href=\"{office_link}\" style=\"background:#2563eb;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none\">開啟詢問單並回覆 →</a></p>"
-        f"<div style=\"border:1px solid #d7dce2;background:#f5f7fa;border-radius:10px;padding:14px 16px;margin:18px 0\"><strong>處室登入資訊</strong><p style=\"margin:8px 0 0\">後台連結：<a href=\"{office_home}\">{office_home}</a><br>該處室專屬密碼：<code style=\"font-size:15px;font-weight:700\">{safe_login_code}</code></p></div>"
-        f"<p style=\"color:#6b7280;font-size:13px\">若按鈕無法開啟，請複製此連結：<br>{office_link}<br>登入後即可查看及回覆詢問單；回覆內容會直接顯示給提問學生。</p></div>",
+        f"<h3 style=\"margin:20px 0 6px\">{escape(question_title)}</h3><p>{safe_query}</p>"
+        f"<h3 style=\"margin:20px 0 6px\">{escape(desc_title)}</h3><p>{safe_description}</p>"
+        f"<p style=\"margin:24px 0\"><a href=\"{office_link}\" style=\"background:#2563eb;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none\">{escape(button_text)}</a></p>"
+        f"<div style=\"border:1px solid #d7dce2;background:#f5f7fa;border-radius:10px;padding:14px 16px;margin:18px 0\"><strong>{escape(login_title)}</strong><p style=\"margin:8px 0 0\">後台連結：<a href=\"{office_home}\">{office_home}</a><br>{escape(code_label)}：<code style=\"font-size:15px;font-weight:700\">{safe_login_code}</code></p></div>"
+        f"<p style=\"color:#6b7280;font-size:13px\">若按鈕無法開啟，請複製此連結：<br>{office_link}<br>{escape(footer_text)}</p></div>",
         subtype="html",
     )
     try:
@@ -270,14 +291,21 @@ def send_student_resolution_email(ticket: dict) -> tuple[bool, str, str]:
     ticket_link = f"{base_url()}/ticket/{ticket['ticket_no']}?key={access_key}"
     question = str(ticket.get("query") or ticket.get("subject") or "")
     answer = str(ticket.get("resolution") or "")
+    tokens = {"處室": str(ticket.get("office") or ""), "單號": str(ticket.get("ticket_no") or "")}
+    student_subject = _mail_text("mail_student_subject", tokens)
+    student_intro = _mail_text("mail_student_intro", tokens)
+    q_label = _mail_text("mail_student_q_label", tokens)
+    a_label = _mail_text("mail_student_a_label", tokens)
+    rate_prompt = _mail_text("mail_student_rate_prompt", tokens)
+    student_button = _mail_text("mail_student_button", tokens)
     message = EmailMessage()
-    message["Subject"] = f"[{_subject_tag(settings)} {ticket['ticket_no']}] 處室已回覆，請為服務評分"
+    message["Subject"] = f"[{_subject_tag(settings)} {ticket['ticket_no']}] {student_subject}"
     message["From"] = _from_header(settings)
     message["To"] = recipient
     message["Reply-To"] = settings["username"]
     message.set_content(
-        f"您好：\n\n您的詢問單已由「{ticket['office']}」回覆並結案。\n\n"
-        f"詢問單編號：{ticket['ticket_no']}\n\n【Q 問題】\n{question}\n\n【A 處室回覆】\n{answer}\n\n"
+        f"您好：\n\n{student_intro}\n\n"
+        f"詢問單編號：{ticket['ticket_no']}\n\n【{q_label}】\n{question}\n\n【{a_label}】\n{answer}\n\n"
         f"請開啟下列連結查看 Q&A 並評分 1～5 顆星：\n{ticket_link}#rate-card\n"
     )
     safe_office = escape(str(ticket["office"]))
@@ -290,10 +318,10 @@ def send_student_resolution_email(ticket: dict) -> tuple[bool, str, str]:
     )
     message.add_alternative(
         "<div style=\"font-family:'Noto Sans TC',Arial,sans-serif;font-size:15px;color:#1f2933;line-height:1.7;max-width:680px\">"
-        f"<p>您好：</p><p>您的詢問單 <strong>{safe_no}</strong> 已由「<strong>{safe_office}</strong>」回覆並結案。</p>"
-        f"<div style=\"border:1px solid #ddd;border-radius:10px;padding:16px;margin:18px 0\"><strong>Q．問題</strong><p>{safe_q}</p><hr style=\"border:0;border-top:1px solid #eee\"><strong>A．處室回覆</strong><p>{safe_a}</p></div>"
-        f"<p><strong>請為本次服務評分：</strong></p><div>{star_links}</div>"
-        f"<p style=\"margin:24px 0\"><a href=\"{ticket_link}#rate-card\" style=\"background:#e6532d;color:#fff;padding:11px 18px;border-radius:8px;text-decoration:none\">開啟詢問單、查看 Q&A 並評分 →</a></p>"
+        f"<p>您好：</p><p>{escape(student_intro)}</p>"
+        f"<div style=\"border:1px solid #ddd;border-radius:10px;padding:16px;margin:18px 0\"><strong>{escape(q_label)}</strong><p>{safe_q}</p><hr style=\"border:0;border-top:1px solid #eee\"><strong>{escape(a_label)}</strong><p>{safe_a}</p></div>"
+        f"<p><strong>{escape(rate_prompt)}</strong></p><div>{star_links}</div>"
+        f"<p style=\"margin:24px 0\"><a href=\"{ticket_link}#rate-card\" style=\"background:#e6532d;color:#fff;padding:11px 18px;border-radius:8px;text-decoration:none\">{escape(student_button)}</a></p>"
         f"<p style=\"color:#6b7280;font-size:13px\">若按鈕無法開啟，請複製此連結：<br>{ticket_link}</p></div>",
         subtype="html",
     )

@@ -86,6 +86,19 @@ DEFAULT_TEXT = {
     "email_label": "電子郵件",
     "email_cancel": "取消",
     "email_submit": "送出詢問單 →",
+    "mail_office_intro": "AI 已將下列詢問單分派至「{處室}」，請協助回覆。",
+    "mail_office_question_title": "問題",
+    "mail_office_desc_title": "問題說明",
+    "mail_office_button": "開啟詢問單並回覆 →",
+    "mail_office_login_title": "處室登入資訊",
+    "mail_office_code_label": "專屬登入碼",
+    "mail_office_footer": "登入後即可查看及回覆詢問單；回覆內容會直接顯示給提問學生。",
+    "mail_student_subject": "處室已回覆，請為服務評分",
+    "mail_student_intro": "您的詢問單 {單號} 已由「{處室}」回覆並結案。",
+    "mail_student_q_label": "Q．問題",
+    "mail_student_a_label": "A．處室回覆",
+    "mail_student_rate_prompt": "請為本次服務評分：",
+    "mail_student_button": "開啟詢問單、查看 Q&A 並評分 →",
 }
 
 DEFAULT_SUGGESTIONS = [
@@ -656,6 +669,19 @@ def text_fields() -> list:
         "email_label": "Email 視窗：欄位名稱",
         "email_cancel": "Email 視窗：取消按鈕",
         "email_submit": "Email 視窗：送出按鈕",
+        "mail_office_intro": "開頭（可用 {處室}、{單號}）",
+        "mail_office_question_title": "「問題」標題",
+        "mail_office_desc_title": "「問題說明」標題",
+        "mail_office_button": "開啟詢問單按鈕",
+        "mail_office_login_title": "登入資訊區標題",
+        "mail_office_code_label": "登入碼的名稱",
+        "mail_office_footer": "結尾提醒",
+        "mail_student_subject": "信件主旨（接在單號後）",
+        "mail_student_intro": "開頭（可用 {處室}、{單號}）",
+        "mail_student_q_label": "問題標題",
+        "mail_student_a_label": "處室回覆標題",
+        "mail_student_rate_prompt": "評分提示",
+        "mail_student_button": "查看與評分按鈕",
     }
     groups = {
         "頁首與品牌": ["page_title", "brand_mark", "site_title", "site_subtitle", "beta_label", "beta_small"],
@@ -670,9 +696,15 @@ def text_fields() -> list:
         "查無答案提示": ["no_answer_title", "no_answer_text", "ticket_prompt_title", "ticket_prompt_text",
                      "ticket_prompt_button", "ticket_creating"],
         "Email 視窗": ["email_badge", "email_title", "email_intro", "email_label", "email_cancel", "email_submit"],
+        "處室通知信": ["mail_office_intro", "mail_office_question_title", "mail_office_desc_title",
+                   "mail_office_button", "mail_office_login_title", "mail_office_code_label",
+                   "mail_office_footer"],
+        "學生結案信": ["mail_student_subject", "mail_student_intro", "mail_student_q_label",
+                   "mail_student_a_label", "mail_student_rate_prompt", "mail_student_button"],
     }
     long_fields = {"site_subtitle", "sidebar_note", "welcome_text", "newchat_welcome_text",
-                   "disclaimer", "ticket_intro", "no_answer_text", "ticket_prompt_text", "email_intro"}
+                   "disclaimer", "ticket_intro", "no_answer_text", "ticket_prompt_text", "email_intro",
+                   "mail_office_intro", "mail_office_footer", "mail_student_intro"}
     out = []
     for group, keys in groups.items():
         for key in keys:
