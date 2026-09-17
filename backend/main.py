@@ -13,7 +13,9 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import COLLECTION_NAME, PROJECT_ROOT
 from .embedding import embed_text
-from .llm_service import answer_from_faq, ollama_status, route_ticket_office
+from .llm_service import site_text, answer_from_faq, ollama_status, route_ticket
+from .department_service import load_departments, save_departments, match_department, department_office
+from .department_service import DEFAULTS as DEPARTMENT_DEFAULTS
 from .knowledge_service import faq_categories, sync_resolved_ticket
 from . import faq_service
 from .analytics import add_ticket_reply, create_ticket, delete_ticket, list_tickets, log_feedback, log_query, public_ticket, rate_ticket, record_knowledge_sync, record_student_email, record_ticket_email, stats, ticket_detail, update_ticket
@@ -276,7 +278,7 @@ def ask(request: SearchRequest):
         results = search_faq(embed_text(request.query), max(request.limit, 5))
         log_query(request.query, results)
         if not results:
-            return {"query": request.query, "answer": "目前知識庫沒有足夠資訊，建議洽詢系辦公室確認。", "results": [], "generated": False, "model": "", "notice": "未找到相關 FAQ", "followups": [], "steps": []}
+            return {"query": request.query, "answer": site_text("ai_no_info"), "results": [], "generated": False, "model": "", "notice": "未找到相關 FAQ", "followups": [], "steps": []}
         try:
             answer = answer_from_faq(request.query, results[:5])
             generated, notice = True, ""
@@ -341,6 +343,7 @@ def email_settings_save(request: MailSettingsRequest, x_admin_token: str = Heade
     data = request.model_dump()
     password = data.pop("password", "")
     offices = data.pop("offices", {})
+    departments = data.pop("departments", {})
     recipients = []
     for email in data.get("student_recipients", []):
         email = email.strip().lower()
@@ -354,8 +357,26 @@ def email_settings_save(request: MailSettingsRequest, x_admin_token: str = Heade
         save_password(password)
     if offices:
         save_office_emails(offices)
-    logger.info("更新詢問單通知信箱設定 offices=%d", len(offices))
+    if departments:
+        try:
+            save_departments(departments)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+    logger.info("更新詢問單通知信箱設定 offices=%d departments=%d", len(offices), len(departments))
     return mail_status()
+
+
+@app.get("/api/admin/departments")
+def departments_get(x_admin_token: str = Header(default="")):
+    require_admin(x_admin_token)
+    return load_departments()
+
+
+@app.get("/api/admin/departments/defaults")
+def departments_defaults(x_admin_token: str = Header(default="")):
+    """後台「關鍵字回復預設」用；回官網原始信箱與內建關鍵字。"""
+    require_admin(x_admin_token)
+    return DEPARTMENT_DEFAULTS
 
 
 @app.post("/api/admin/mail/test")
@@ -384,7 +405,11 @@ def ticket_resend_mail(ticket_no: str, x_admin_token: str = Header(default="")):
 def ticket_create(request: TicketCreateRequest, background_tasks: BackgroundTasks):
     data = request.model_dump()
     if not data["office"]:
-        data["office"] = route_ticket_office(data["query"], data["description"])
+        data["office"], data["department"] = route_ticket(data["query"], data["description"])
+    else:
+        # 前台已指定處室時只補系所，不重跑 AI 分流
+        matched = match_department(f"{data['query']} {data['description']}")
+        data["department"] = matched if matched and department_office(matched) == data["office"] else ""
     ticket = create_ticket(data)
     background_tasks.add_task(_notify_ticket, ticket)
     return ticket

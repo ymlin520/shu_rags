@@ -42,3 +42,15 @@
 .mail-log-section{margin:18px 0}.mail-log-section>p{margin:4px 0 12px;font-size:13px}#mail-log-search{width:min(360px,100%);padding:10px;border:1px solid var(--line);border-radius:8px;font:inherit;margin-bottom:6px}#mail-log td small{margin-top:3px}#mail-log-count{font-size:13px;color:#8a837c}
 
 .row-actions{white-space:nowrap;text-align:right}.danger{border:1px solid #d9b3a8;background:transparent;color:#c83d1d;border-radius:8px;padding:6px 12px;margin-left:8px;cursor:pointer;font:inherit;font-size:13px}.danger:hover{background:#f9ddd3;border-color:var(--accent)}.mail-line .danger{margin-left:auto}
+
+/* 系所信箱與分派關鍵字 */
+.dept-mail-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin:28px 0 10px}
+.dept-mail-head h3{margin:0}
+.dept-mail-head p{margin:4px 0 0;color:#6b7280;font-size:13px;line-height:1.6}
+.dept-mail-list{display:flex;flex-direction:column;gap:10px}
+.dept-group-title{margin:14px 0 2px;font-size:13px;font-weight:700;color:#2563eb;letter-spacing:.04em}
+.dept-row{display:grid;grid-template-columns:200px 250px 1fr;gap:10px;align-items:center}
+.dept-row .dept-name{font-size:14px;color:#1f2933}
+.dept-row input{width:100%;padding:8px 10px;border:1px solid #d7dce2;border-radius:8px;font-size:13px}
+@media (max-width:900px){.dept-row{grid-template-columns:1fr}.dept-row .dept-name{font-weight:700}
+.dept-mail-head{flex-direction:column;align-items:stretch}}

@@ -8,6 +8,7 @@ from email.message import EmailMessage
 from pathlib import Path
 
 from . import theme_service
+from .department_service import department_email, load_departments
 from .config import PROJECT_ROOT
 
 DEFAULT_EMAIL = os.getenv("FAQ_DEFAULT_EMAIL", "admin@example.edu.tw")
@@ -138,6 +139,7 @@ def mail_status() -> dict:
         "student_recipients": settings.get("student_recipients", [DEFAULT_EMAIL]),
         "base_url": base_url(),
         "offices": load_office_emails(),
+        "departments": load_departments(),
     }
 
 
@@ -206,11 +208,13 @@ def send_ticket_email(ticket: dict) -> tuple[bool, str]:
     settings = load_settings()
     if not _configured(settings):
         return False, "尚未設定寄件帳號或應用程式密碼"
-    recipient = office_email(ticket["office"])
+    department = str(ticket.get("department") or "").strip()
+    recipient = department_email(department) or office_email(ticket["office"])
+    unit_label = department or str(ticket.get("office") or "")
     office_link = f"{base_url()}/office/ticket/{ticket['ticket_no']}"
     office_home = f"{base_url()}/office"
     login_code = office_login_code(ticket["office"])
-    tokens = {"處室": str(ticket.get("office") or ""), "單號": str(ticket.get("ticket_no") or "")}
+    tokens = {"處室": unit_label, "單號": str(ticket.get("ticket_no") or "")}
     intro_text = _mail_text("mail_office_intro", tokens)
     question_title = _mail_text("mail_office_question_title", tokens)
     desc_title = _mail_text("mail_office_desc_title", tokens)
@@ -219,7 +223,8 @@ def send_ticket_email(ticket: dict) -> tuple[bool, str]:
     code_label = _mail_text("mail_office_code_label", tokens)
     footer_text = _mail_text("mail_office_footer", tokens)
     message = EmailMessage()
-    message["Subject"] = f"[{_subject_tag(settings)} {ticket['ticket_no']}] {ticket['subject']}"
+    subject_unit = f"／{department}" if department else ""
+    message["Subject"] = f"[{_subject_tag(settings)}{subject_unit} {ticket['ticket_no']}] {ticket['subject']}"
     message["From"] = _from_header(settings)
     message["To"] = recipient
     message["Reply-To"] = settings["username"]
@@ -228,6 +233,7 @@ def send_ticket_email(ticket: dict) -> tuple[bool, str]:
         f"詢問單編號：{ticket['ticket_no']}\n"
         f"建立時間：{ticket.get('created_at', '')}\n"
         f"分類：{ticket.get('category', '')}\n"
+        f"分派單位：{unit_label}\n"
         f"申請人：{ticket.get('requester_name', '')}（{ticket.get('requester_contact', '')}）\n\n"
         f"── {question_title} ──\n{ticket['query']}\n\n"
         f"── {desc_title} ──\n{ticket['description']}\n\n"
@@ -237,6 +243,7 @@ def send_ticket_email(ticket: dict) -> tuple[bool, str]:
         f"{footer_text}\n"
     )
     safe_office = escape(str(ticket["office"]))
+    safe_unit = escape(unit_label)
     safe_ticket_no = escape(str(ticket["ticket_no"]))
     safe_subject = escape(str(ticket["subject"]))
     safe_query = escape(str(ticket["query"]))
@@ -249,6 +256,7 @@ def send_ticket_email(ticket: dict) -> tuple[bool, str]:
         f"<tr><td style=\"padding:4px 12px 4px 0;color:#6b7280\">詢問單編號</td><td><strong>{safe_ticket_no}</strong></td></tr>"
         f"<tr><td style=\"padding:4px 12px 4px 0;color:#6b7280\">建立時間</td><td>{ticket.get('created_at', '')}</td></tr>"
         f"<tr><td style=\"padding:4px 12px 4px 0;color:#6b7280\">分類</td><td>{ticket.get('category', '')}</td></tr>"
+        f"<tr><td style=\"padding:4px 12px 4px 0;color:#6b7280\">分派單位</td><td>{safe_unit}</td></tr>"
         f"<tr><td style=\"padding:4px 12px 4px 0;color:#6b7280\">申請人</td><td>{ticket.get('requester_name', '')}（{ticket.get('requester_contact', '')}）</td></tr>"
         "</table>"
         f"<h3 style=\"margin:20px 0 6px\">{escape(question_title)}</h3><p>{safe_query}</p>"

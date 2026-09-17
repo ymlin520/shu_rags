@@ -80,6 +80,7 @@ DEFAULT_TEXT = {
     "ticket_prompt_text": "確認後，AI 會依問題內容自動判斷並送至適合的處室。",
     "ticket_prompt_button": "確認提出詢問單 →",
     "ticket_creating": "AI 正在判斷承辦處室並建立詢問單…",
+    "ai_no_info": "目前知識庫沒有足夠資訊，建議洽詢聯合辦公室確認。",
     "email_badge": "提出詢問單",
     "email_title": "請先填寫 Email",
     "email_intro": "請留下您的電子郵件，方便承辦處室與您聯繫，接著即可送出詢問單。",
@@ -663,6 +664,7 @@ def text_fields() -> list:
         "ticket_prompt_text": "提出提示卡：說明",
         "ticket_prompt_button": "提出提示卡：確認按鈕",
         "ticket_creating": "送出後的處理中文字",
+        "ai_no_info": "查無資料時 AI 的回覆",
         "email_badge": "Email 視窗小標",
         "email_title": "Email 視窗標題",
         "email_intro": "Email 視窗說明",
@@ -694,7 +696,7 @@ def text_fields() -> list:
                      "ticket_desc_label", "ticket_name_label", "ticket_contact_label",
                      "ticket_cancel", "ticket_submit"],
         "查無答案提示": ["no_answer_title", "no_answer_text", "ticket_prompt_title", "ticket_prompt_text",
-                     "ticket_prompt_button", "ticket_creating"],
+                     "ticket_prompt_button", "ticket_creating", "ai_no_info"],
         "Email 視窗": ["email_badge", "email_title", "email_intro", "email_label", "email_cancel", "email_submit"],
         "處室通知信": ["mail_office_intro", "mail_office_question_title", "mail_office_desc_title",
                    "mail_office_button", "mail_office_login_title", "mail_office_code_label",
@@ -704,7 +706,7 @@ def text_fields() -> list:
     }
     long_fields = {"site_subtitle", "sidebar_note", "welcome_text", "newchat_welcome_text",
                    "disclaimer", "ticket_intro", "no_answer_text", "ticket_prompt_text", "email_intro",
-                   "mail_office_intro", "mail_office_footer", "mail_student_intro"}
+                   "mail_office_intro", "mail_office_footer", "mail_student_intro", "ai_no_info"}
     out = []
     for group, keys in groups.items():
         for key in keys:

@@ -35,3 +35,4 @@ data/css-original/
 data/design-assets/
 data/site-theme-override.css
 *.bak2-*
+department-emails.json

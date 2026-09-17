@@ -67,6 +67,7 @@ class TicketUpdateRequest(BaseModel):
     assignee: str = Field(default="", max_length=100)
     resolution: str = Field(default="", max_length=3000)
     office: str = Field(default="", max_length=100)
+    department: str = Field(default="", max_length=100)
 
 
 class TicketRateRequest(BaseModel):
@@ -89,6 +90,7 @@ class MailSettingsRequest(BaseModel):
     subject_tag: str = Field(default="校務AI系統", max_length=100)
     password: str = Field(default="", max_length=200)
     offices: dict[str, str] = Field(default_factory=dict)
+    departments: dict[str, dict] = Field(default_factory=dict)
     student_recipients: list[str] = Field(default_factory=list, max_length=20)
 
 

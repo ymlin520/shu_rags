@@ -3,6 +3,9 @@ import os
 import opencc
 import requests
 
+from . import theme_service
+from .department_service import department_office, has_priority_word, match_department
+
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
 _S2T = opencc.OpenCC("s2t")
@@ -10,6 +13,15 @@ _S2T = opencc.OpenCC("s2t")
 # 逐字轉換（不走片語規則）可避免動到台灣慣用寫法；下列是知識庫本來就在用、
 # 但 s2t 會改成異體字的字（台北的台、床位的床…），保持原樣不轉。
 _KEEP_AS_IS = set("准占台吃峰床秘群里")
+
+
+def site_text(key: str, fallback: str = "") -> str:
+    """取外觀後台 /design 的文案設定，讀不到時用內建預設值。"""
+    try:
+        value = str(theme_service.load_config()["text"].get(key) or "").strip()
+    except Exception:
+        value = ""
+    return value or theme_service.DEFAULT_TEXT.get(key, "") or fallback
 
 
 def to_traditional(text: str) -> str:
@@ -49,11 +61,18 @@ def _fallback_office(text: str) -> str:
     return "其他行政單位"
 
 
-def route_ticket_office(query: str, description: str = "") -> str:
+def route_ticket(query: str, description: str = "") -> tuple[str, str]:
+    """回傳 (處室, 系所)。系所為空字串代表不是系所層級的問題。"""
     text = f"{query}\n{description}".strip()
     keyword_choice = _fallback_office(text)
+    department = match_department(text)
+    # 題目同時出現系所名稱與系所級業務字（系辦、導師、必修…）時，系所蓋過處室關鍵字
+    if department and (keyword_choice == "其他行政單位" or has_priority_word(text)):
+        return department_office(department) or "系辦公室", department
+    if keyword_choice == "系辦公室":
+        return keyword_choice, department
     if keyword_choice != "其他行政單位":
-        return keyword_choice
+        return keyword_choice, ""
     try:
         response = requests.post(
             f"{OLLAMA_URL}/api/chat",
@@ -64,10 +83,14 @@ def route_ticket_office(query: str, description: str = "") -> str:
         response.raise_for_status()
         choice = response.json().get("message", {}).get("content", "").strip()
         for office in OFFICES:
-            if office in choice: return office
+            if office in choice: return office, (department if office == "系辦公室" else "")
     except (requests.RequestException, ValueError):
         pass
-    return keyword_choice
+    return keyword_choice, ""
+
+
+def route_ticket_office(query: str, description: str = "") -> str:
+    return route_ticket(query, description)[0]
 
 
 def ollama_status() -> dict[str, str | bool]:
@@ -94,7 +117,7 @@ def answer_from_faq(query: str, results: list[dict]) -> str:
         "你是系辦公室 FAQ 助理。全部內容一律使用臺灣繁體中文，絕對不可出現任何簡體字，"
         "以親切、清楚、自然的語氣回答。"
         "只能根據提供的 FAQ 內容作答，不得加入常識推測、虛構規定、日期、流程或聯絡方式。"
-        "若資料不足，請明確說『目前知識庫沒有足夠資訊，建議洽詢系辦公室確認』。"
+        f"若資料不足，請明確說『{site_text('ai_no_info')}』。"
         "整合重複內容，保留重要條件與例外；回答控制在 2 到 5 個短段落。"
         "不要聲稱自己看過未提供的文件。只輸出可以直接呈現給使用者的最終答案，"
         "不要描述你的任務、分析步驟、來源篩選過程或思考過程。"

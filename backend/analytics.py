@@ -86,6 +86,8 @@ def _connect() -> sqlite3.Connection:
         connection.execute("ALTER TABLE tickets ADD COLUMN student_email_status TEXT NOT NULL DEFAULT 'pending'")
     if "student_email_error" not in columns:
         connection.execute("ALTER TABLE tickets ADD COLUMN student_email_error TEXT NOT NULL DEFAULT ''")
+    if "department" not in columns:
+        connection.execute("ALTER TABLE tickets ADD COLUMN department TEXT NOT NULL DEFAULT ''")
     return connection
 
 
@@ -96,12 +98,15 @@ def create_ticket(data: dict) -> dict:
         access_key = secrets.token_urlsafe(24)
         db.execute(
             """INSERT INTO tickets(ticket_no,query,subject,description,category,office,
-               requester_name,requester_contact,access_key) VALUES(?,?,?,?,?,?,?,?,?)""",
+               requester_name,requester_contact,access_key,department) VALUES(?,?,?,?,?,?,?,?,?,?)""",
             (ticket_no, data["query"], data["subject"], data["description"], data["category"],
-             data["office"], data["requester_name"], data["requester_contact"], access_key),
+             data["office"], data["requester_name"], data["requester_contact"], access_key,
+             data.get("department", "")),
         )
         db.execute("INSERT INTO ticket_events(ticket_no,event_type,actor,message,office) VALUES(?,?,?,?,?)",
-                   (ticket_no, "created", "系統", "AI 查無足夠資料，建立服務詢問單", data["office"]))
+                   (ticket_no, "created", "系統",
+                    "AI 查無足夠資料，建立服務詢問單" + (f"（分派 {data['department']}）" if data.get("department") else ""),
+                    data["office"]))
         row = db.execute("SELECT * FROM tickets WHERE ticket_no=?", (ticket_no,)).fetchone()
         return _local(row)
 
@@ -152,12 +157,21 @@ def update_ticket(ticket_no: str, data: dict) -> dict | None:
         current = db.execute("SELECT * FROM tickets WHERE ticket_no=?", (ticket_no,)).fetchone()
         if not current: return None
         office = data.get("office") or current["office"]
-        db.execute(f"""UPDATE tickets SET status=?,assignee=?,resolution=?,office=?,updated_at=CURRENT_TIMESTAMP,
-                resolved_at={resolved_at} WHERE ticket_no=?""",
-            (data["status"], data.get("assignee", ""), data.get("resolution", ""), office, ticket_no))
-        if office != current["office"]:
+        # 轉到別的處室就清掉系所；管理者可在同一處室下改指定系所
+        keys = current.keys()
+        previous_department = current["department"] if "department" in keys else ""
+        department = str(data.get("department") or "").strip()
+        if "department" not in data:
+            department = previous_department
+        if office != current["office"] and not data.get("department"):
+            department = ""
+        db.execute(f"""UPDATE tickets SET status=?,assignee=?,resolution=?,office=?,department=?,
+                updated_at=CURRENT_TIMESTAMP,resolved_at={resolved_at} WHERE ticket_no=?""",
+            (data["status"], data.get("assignee", ""), data.get("resolution", ""), office, department, ticket_no))
+        if office != current["office"] or department != previous_department:
+            target = f"{office}（{department}）" if department else office
             db.execute("INSERT INTO ticket_events(ticket_no,event_type,actor,message,office) VALUES(?,?,?,?,?)",
-                       (ticket_no, "transfer", data.get("assignee") or "管理者", f"轉派至 {office}", office))
+                       (ticket_no, "transfer", data.get("assignee") or "管理者", f"轉派至 {target}", office))
         if data["status"] != current["status"] or data.get("resolution", ""):
             db.execute("INSERT INTO ticket_events(ticket_no,event_type,actor,message,office) VALUES(?,?,?,?,?)",
                        (ticket_no, "update", data.get("assignee") or "承辦單位", data.get("resolution") or data["status"], office))
