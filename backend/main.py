@@ -14,7 +14,8 @@ from fastapi.staticfiles import StaticFiles
 from .config import COLLECTION_NAME, PROJECT_ROOT
 from .embedding import embed_text
 from .llm_service import site_text, answer_from_faq, ollama_status, route_ticket
-from .department_service import load_departments, save_departments, match_department, department_office
+from .department_service import (load_departments, save_departments, match_department,
+                                 department_office, department_by_token, ensure_tokens)
 from .department_service import DEFAULTS as DEPARTMENT_DEFAULTS
 from .knowledge_service import faq_categories, sync_resolved_ticket
 from . import faq_service
@@ -45,6 +46,9 @@ frontend = PROJECT_ROOT / "frontend"
 app.mount("/static", StaticFiles(directory=frontend), name="static")
 theme_service.ASSET_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/media", StaticFiles(directory=theme_service.ASSET_DIR), name="media")
+
+
+ensure_tokens()  # 新系所啟動時自動配發專屬登入碼
 
 
 @app.get("/", include_in_schema=False)
@@ -220,13 +224,21 @@ def require_admin(token: str) -> None:
         raise HTTPException(status_code=401, detail="管理密碼不正確")
 
 
-def require_office(token: str) -> str:
+def require_office_scope(token: str) -> tuple[str, str]:
+    """回傳 (處室, 系所)。系所登入碼只看得到分派給該系所的詢問單。"""
+    department = department_by_token(token)
+    if department:
+        return department_office(department) or "系辦公室", department
     path = PROJECT_ROOT / "office-tokens.json"
     if not path.exists(): raise HTTPException(status_code=503, detail="尚未設定處室帳號")
     tokens = json.loads(path.read_text(encoding="utf-8-sig"))
     for office, saved in tokens.items():
-        if token and token == saved: return office
-    raise HTTPException(status_code=401, detail="處室登入碼不正確")
+        if token and token == saved: return office, ""
+    raise HTTPException(status_code=401, detail="登入碼不正確")
+
+
+def require_office(token: str) -> str:
+    return require_office_scope(token)[0]
 
 
 @app.get("/health")
@@ -448,33 +460,40 @@ def tickets_get(status: str = "", office: str = "", x_admin_token: str = Header(
 
 @app.get("/api/office/tickets")
 def office_tickets(status: str = "", x_office_token: str = Header(default="")):
-    office = require_office(x_office_token)
-    return {"office": office, "tickets": list_tickets(status, office)}
+    office, department = require_office_scope(x_office_token)
+    return {"office": office, "department": department, "unit": department or office,
+            "tickets": list_tickets(status, office, department)}
 
 
 @app.get("/api/office/mail")
 def office_mail_get(x_office_token: str = Header(default="")):
-    office = require_office(x_office_token)
+    office, department = require_office_scope(x_office_token)
     info = mail_status()
-    return {"office": office, "email": info["offices"].get(office, info["default_email"]),
+    email = (info["departments"].get(department, {}).get("email") if department
+             else info["offices"].get(office)) or info["default_email"]
+    return {"office": office, "department": department, "unit": department or office, "email": email,
             "default_email": info["default_email"], "mail_enabled": info["configured"]}
 
 
 @app.put("/api/office/mail")
 def office_mail_save(request: OfficeMailRequest, x_office_token: str = Header(default="")):
-    office = require_office(x_office_token)
+    office, department = require_office_scope(x_office_token)
     email = request.email.strip().lower()
     if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
         raise HTTPException(status_code=422, detail="請輸入有效的電子郵件地址")
-    save_office_emails({office: email})
-    logger.info("處室自行更新詢問單通知信箱 office=%s", office)
-    return {"saved": True, "office": office, "email": email}
+    if department:
+        save_departments({department: {"email": email}})
+    else:
+        save_office_emails({office: email})
+    logger.info("處室自行更新詢問單通知信箱 office=%s department=%s", office, department or "-")
+    return {"saved": True, "office": office, "department": department,
+            "unit": department or office, "email": email}
 
 
 @app.get("/api/office/tickets/{ticket_no}")
 def office_ticket_get(ticket_no: str, x_office_token: str = Header(default="")):
-    office = require_office(x_office_token)
-    rows = [x for x in list_tickets(office=office) if x["ticket_no"] == ticket_no]
+    office, department = require_office_scope(x_office_token)
+    rows = [x for x in list_tickets(office=office, department=department) if x["ticket_no"] == ticket_no]
     if not rows: raise HTTPException(status_code=404, detail="找不到分派給本處室的詢問單")
     return ticket_detail(ticket_no)
 
@@ -482,8 +501,8 @@ def office_ticket_get(ticket_no: str, x_office_token: str = Header(default="")):
 @app.patch("/api/office/tickets/{ticket_no}")
 def office_ticket_update(ticket_no: str, request: TicketUpdateRequest, background_tasks: BackgroundTasks,
                          x_office_token: str = Header(default="")):
-    office = require_office(x_office_token)
-    rows = [x for x in list_tickets(office=office) if x["ticket_no"] == ticket_no]
+    office, department = require_office_scope(x_office_token)
+    rows = [x for x in list_tickets(office=office, department=department) if x["ticket_no"] == ticket_no]
     if not rows: raise HTTPException(status_code=404, detail="找不到分派給本處室的詢問單")
     previous_office = rows[0]["office"]
     data = request.model_dump()

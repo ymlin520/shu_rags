@@ -45,6 +45,13 @@ Set-ExecutionPolicy -Scope Process Bypass; .\setup.ps1; .\start.ps1
 
 ## 更新紀錄
 
+### 2026-09-17（系所專屬登入碼）
+
+- **每個系所有自己的登入碼**：`department-tokens.json`（gitignore）存 36 個單位的專屬碼，服務啟動時 `ensure_tokens()` 會替新單位自動配發、把停招或改名的單位清掉。通知信附的登入碼改成該系所自己的（沒有系所時維持處室的碼）。
+- **處室後台 `/office` 可用系所登入碼登入**：`require_office_scope()` 會回 (處室, 系所)，系所登入後只看得到分派給該系所的詢問單，畫面標題與詢問單頁顯示系所名稱，自行修改通知信箱時寫回系所設定而不是處室設定。處室登入碼（例如系辦公室）仍看得到該處室全部的單。
+- 對照表輸出在 `department-login-codes.txt`（gitignore），含單位、信箱、登入碼與後台連結。
+- **移除停招學程**：國際廉能治理碩士在職學位學程、非營利與社會企業碩士在職學位學程不再列入分派，系所數由 38 調整為 36。
+
 ### 2026-09-17（系所分派）
 
 - **新增 38 個系所／學院／共同教學單位的信箱**，資料取自世新官網「所有單位信箱」（<https://www.shu.edu.tw/Email-info.aspx>），預設值寫在 `backend/department_service.py`，後台改過的值存在 `department-emails.json`（已 gitignore，與 `office-emails.json` 一樣屬執行期資料）。

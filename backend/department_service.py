@@ -10,10 +10,12 @@
 """
 import json
 import re
+import secrets
 
 from .config import PROJECT_ROOT
 
 DEPT_FILE = PROJECT_ROOT / "department-emails.json"
+DEPT_TOKENS_FILE = PROJECT_ROOT / "department-tokens.json"
 
 # 出現系所名稱時，這些字代表「系所自己的業務」，要蓋過處室關鍵字（例如「資管系必修課」不給課務組）
 PRIORITY_WORDS = ["系辦", "導師", "系主任", "系學會", "專題", "必修", "選修", "系上", "課程地圖", "開課", "畢業門檻"]
@@ -62,10 +64,7 @@ DEFAULTS: dict[str, dict] = {
                 "keywords": ["行政管理學系", "行管系", "行管"]},
     "企業管理學系": {"email": "ba@mail.shu.edu.tw", "group": "管理學院", "office": "系辦公室",
                 "keywords": ["企業管理學系", "企管系", "企管"]},
-    "國際廉能治理碩士在職學位學程": {"email": "smgmt@mail.shu.edu.tw", "group": "管理學院", "office": "系辦公室",
-                        "keywords": ["國際廉能治理碩士在職學位學程", "國際廉能治理", "廉能治理"]},
-    "非營利與社會企業碩士在職學位學程": {"email": "smgmt@cc.shu.edu.tw", "group": "管理學院", "office": "系辦公室",
-                         "keywords": ["非營利與社會企業碩士在職學位學程", "非營利與社會企業", "非營利學程"]},
+    # 國際廉能治理碩士在職學位學程、非營利與社會企業碩士在職學位學程已停招，不列入分派
     "人文社會學院": {"email": "chss@mail.shu.edu.tw", "group": "人文社會學院", "office": "系辦公室",
                 "keywords": ["人文社會學院", "人社學院", "人社院"]},
     "社會發展研究所": {"email": "e62@mail.shu.edu.tw", "group": "人文社會學院", "office": "系辦公室",
@@ -161,6 +160,46 @@ def match_department(text: str) -> str:
 
 def has_priority_word(text: str) -> bool:
     return any(word in (text or "") for word in PRIORITY_WORDS)
+
+
+def load_tokens() -> dict[str, str]:
+    """系所專屬登入碼；與處室的 office-tokens.json 分開存。"""
+    try:
+        saved = json.loads(DEPT_TOKENS_FILE.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        saved = {}
+    return {name: str(code).strip() for name, code in saved.items() if str(code).strip()} if isinstance(saved, dict) else {}
+
+
+def ensure_tokens() -> dict[str, str]:
+    """替還沒有登入碼的系所配一組；已存在的不動。啟動時呼叫，重複執行安全。"""
+    tokens = load_tokens()
+    changed = False
+    for name in DEFAULTS:
+        if not tokens.get(name):
+            tokens[name] = secrets.token_urlsafe(12)
+            changed = True
+    for name in list(tokens):
+        if name not in DEFAULTS:  # 停招或改名的單位不再保留登入碼
+            tokens.pop(name)
+            changed = True
+    if changed:
+        DEPT_TOKENS_FILE.write_text(json.dumps(tokens, ensure_ascii=False, indent=2) + chr(10), encoding="utf-8")
+    return tokens
+
+
+def department_login_code(name: str) -> str:
+    return load_tokens().get(name or "", "")
+
+
+def department_by_token(token: str) -> str:
+    """用登入碼反查系所名稱；找不到回空字串。"""
+    if not token:
+        return ""
+    for name, code in load_tokens().items():
+        if secrets.compare_digest(token, code):
+            return name
+    return ""
 
 
 def department_email(name: str) -> str:

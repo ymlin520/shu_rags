@@ -8,7 +8,7 @@ from email.message import EmailMessage
 from pathlib import Path
 
 from . import theme_service
-from .department_service import department_email, load_departments
+from .department_service import department_email, department_login_code, load_departments
 from .config import PROJECT_ROOT
 
 DEFAULT_EMAIL = os.getenv("FAQ_DEFAULT_EMAIL", "admin@example.edu.tw")
@@ -213,7 +213,7 @@ def send_ticket_email(ticket: dict) -> tuple[bool, str]:
     unit_label = department or str(ticket.get("office") or "")
     office_link = f"{base_url()}/office/ticket/{ticket['ticket_no']}"
     office_home = f"{base_url()}/office"
-    login_code = office_login_code(ticket["office"])
+    login_code = department_login_code(department) or office_login_code(ticket["office"])
     tokens = {"處室": unit_label, "單號": str(ticket.get("ticket_no") or "")}
     intro_text = _mail_text("mail_office_intro", tokens)
     question_title = _mail_text("mail_office_question_title", tokens)

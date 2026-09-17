@@ -36,3 +36,5 @@ data/design-assets/
 data/site-theme-override.css
 *.bak2-*
 department-emails.json
+department-tokens.json
+department-login-codes.txt
