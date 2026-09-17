@@ -54,3 +54,15 @@
 .dept-row input{width:100%;padding:8px 10px;border:1px solid #d7dce2;border-radius:8px;font-size:13px}
 @media (max-width:900px){.dept-row{grid-template-columns:1fr}.dept-row .dept-name{font-weight:700}
 .dept-mail-head{flex-direction:column;align-items:stretch}}
+
+/* 系所統一收件信箱與統計 */
+.dept-to-label{display:block;margin:0 0 14px;font-size:13px;color:#6b7280}
+.dept-to-label input{display:block;width:320px;max-width:100%;margin-top:6px;padding:8px 10px;
+  border:1px solid #d7dce2;border-radius:8px;font-size:14px}
+.dept-stats-head{display:flex;align-items:baseline;gap:12px;margin:26px 0 8px}
+.dept-stats-head h3{margin:0}
+.dept-stats-head span{color:#6b7280;font-size:13px}
+.dept-stats-table{width:100%;border-collapse:collapse;font-size:13px}
+.dept-stats-table th,.dept-stats-table td{padding:8px 10px;border-bottom:1px solid #eef1f5;text-align:left}
+.dept-stats-table th{color:#6b7280;font-weight:600}
+.dept-stats-table td.num{font-variant-numeric:tabular-nums}

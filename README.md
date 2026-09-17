@@ -45,6 +45,12 @@ Set-ExecutionPolicy -Scope Process Bypass; .\setup.ps1; .\start.ps1
 
 ## 更新紀錄
 
+### 2026-09-17（系所問題統一寄教務處）
+
+- **系所層級的詢問單一律寄到教務處 `sdd@mail.shu.edu.tw`**，不再直接寄給各系所信箱。收件信箱是設定值 `department_email_to`（`mail-settings.json`），可在 `/admin`「系所信箱與分派關鍵字」上方的**系所問題統一收件信箱**欄位修改。
+  各系所自己的信箱仍留在設定裡，會印在通知信的「系所信箱」欄位，方便教務處轉寄；主旨仍帶「／系所」。「系辦公室」處室信箱也一併改為 `sdd@`（原為秘書室 `sec@`）。
+- **新增系所問題統計**：`/admin` 系所列表下方新增「系所問題寄送統計」，顯示總筆數、已寄出通知信封數、統一收件信箱，以及各系所的總筆數／已寄出／已解決／最近一筆時間。API 為 `GET /api/admin/departments/stats`（`analytics.department_stats()`）。
+
 ### 2026-09-17（系所專屬登入碼）
 
 - **每個系所有自己的登入碼**：`department-tokens.json`（gitignore）存 36 個單位的專屬碼，服務啟動時 `ensure_tokens()` 會替新單位自動配發、把停招或改名的單位清掉。通知信附的登入碼改成該系所自己的（沒有系所時維持處室的碼）。

@@ -17,6 +17,7 @@ OFFICES = ["教務處招生組", "教務處註冊課務組", "學務處生輔組
 DEFAULT_SETTINGS = {"server": "smtp.gmail.com", "port": 587, "username": "", "from_name": "校務AI系統",
                     "subject_tag": "校務AI系統",
                     "method": "", "use_tls": True, "require_auth": True,
+                    "department_email_to": "sdd@mail.shu.edu.tw",
                     "student_recipients": [DEFAULT_EMAIL]}
 SETTINGS_FILE = PROJECT_ROOT / "mail-settings.json"
 OFFICE_FILE = PROJECT_ROOT / "office-emails.json"
@@ -87,6 +88,11 @@ def save_password(password: str) -> None:
     PASSWORD_FILE.write_text(password.strip(), encoding="utf-8")
 
 
+def department_recipient() -> str:
+    """系所層級問題的統一收件信箱（預設教務處）。"""
+    return str(load_settings().get("department_email_to") or "").strip() or DEFAULT_EMAIL
+
+
 def office_email(office: str) -> str:
     return load_office_emails().get(office) or DEFAULT_EMAIL
 
@@ -140,6 +146,7 @@ def mail_status() -> dict:
         "base_url": base_url(),
         "offices": load_office_emails(),
         "departments": load_departments(),
+        "department_email_to": department_recipient(),
     }
 
 
@@ -209,7 +216,9 @@ def send_ticket_email(ticket: dict) -> tuple[bool, str]:
     if not _configured(settings):
         return False, "尚未設定寄件帳號或應用程式密碼"
     department = str(ticket.get("department") or "").strip()
-    recipient = department_email(department) or office_email(ticket["office"])
+    # 系所問題一律寄到統一收件信箱（教務處），信中附上該系所的信箱供轉寄
+    recipient = department_recipient() if department else office_email(ticket["office"])
+    department_box = department_email(department) if department else ""
     unit_label = department or str(ticket.get("office") or "")
     office_link = f"{base_url()}/office/ticket/{ticket['ticket_no']}"
     office_home = f"{base_url()}/office"
@@ -234,7 +243,8 @@ def send_ticket_email(ticket: dict) -> tuple[bool, str]:
         f"建立時間：{ticket.get('created_at', '')}\n"
         f"分類：{ticket.get('category', '')}\n"
         f"分派單位：{unit_label}\n"
-        f"申請人：{ticket.get('requester_name', '')}（{ticket.get('requester_contact', '')}）\n\n"
+        + (f"系所信箱：{department_box}\n" if department_box else "")
+        + f"申請人：{ticket.get('requester_name', '')}（{ticket.get('requester_contact', '')}）\n\n"
         f"── {question_title} ──\n{ticket['query']}\n\n"
         f"── {desc_title} ──\n{ticket['description']}\n\n"
         f"── 詢問單連結 ──\n{office_link}\n\n"
@@ -257,7 +267,8 @@ def send_ticket_email(ticket: dict) -> tuple[bool, str]:
         f"<tr><td style=\"padding:4px 12px 4px 0;color:#6b7280\">建立時間</td><td>{ticket.get('created_at', '')}</td></tr>"
         f"<tr><td style=\"padding:4px 12px 4px 0;color:#6b7280\">分類</td><td>{ticket.get('category', '')}</td></tr>"
         f"<tr><td style=\"padding:4px 12px 4px 0;color:#6b7280\">分派單位</td><td>{safe_unit}</td></tr>"
-        f"<tr><td style=\"padding:4px 12px 4px 0;color:#6b7280\">申請人</td><td>{ticket.get('requester_name', '')}（{ticket.get('requester_contact', '')}）</td></tr>"
+        + (f"<tr><td style=\"padding:4px 12px 4px 0;color:#6b7280\">系所信箱</td><td>{escape(department_box)}</td></tr>" if department_box else "")
+        + f"<tr><td style=\"padding:4px 12px 4px 0;color:#6b7280\">申請人</td><td>{ticket.get('requester_name', '')}（{ticket.get('requester_contact', '')}）</td></tr>"
         "</table>"
         f"<h3 style=\"margin:20px 0 6px\">{escape(question_title)}</h3><p>{safe_query}</p>"
         f"<h3 style=\"margin:20px 0 6px\">{escape(desc_title)}</h3><p>{safe_description}</p>"

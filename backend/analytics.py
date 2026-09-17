@@ -144,6 +144,22 @@ def list_tickets(status: str = "", office: str = "", department: str = "") -> li
         return result
 
 
+def department_stats() -> dict:
+    """系所層級詢問單的筆數統計（後台「系所問題寄送統計」用）。"""
+    with _connect() as db:
+        rows = db.execute(
+            "SELECT department, COUNT(*) AS total,"
+            " SUM(CASE WHEN status='已解決' THEN 1 ELSE 0 END) AS resolved,"
+            " SUM(CASE WHEN email_status='sent' THEN 1 ELSE 0 END) AS mailed,"
+            " MAX(created_at) AS latest"
+            " FROM tickets WHERE department<>'' GROUP BY department ORDER BY total DESC, department"
+        ).fetchall()
+        items = [_local(row) for row in rows]
+        return {"total": sum(int(x["total"]) for x in items),
+                "mailed": sum(int(x["mailed"] or 0) for x in items),
+                "departments": items}
+
+
 def ticket_detail(ticket_no: str) -> dict | None:
     with _connect() as db:
         row = db.execute("SELECT * FROM tickets WHERE ticket_no=?", (ticket_no,)).fetchone()

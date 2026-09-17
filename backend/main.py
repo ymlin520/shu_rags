@@ -19,8 +19,8 @@ from .department_service import (load_departments, save_departments, match_depar
 from .department_service import DEFAULTS as DEPARTMENT_DEFAULTS
 from .knowledge_service import faq_categories, sync_resolved_ticket
 from . import faq_service
-from .analytics import add_ticket_reply, create_ticket, delete_ticket, list_tickets, log_feedback, log_query, public_ticket, rate_ticket, record_knowledge_sync, record_student_email, record_ticket_email, stats, ticket_detail, update_ticket
-from .mail_service import (mail_status, save_office_emails, save_password, save_settings,
+from .analytics import add_ticket_reply, create_ticket, delete_ticket, department_stats, list_tickets, log_feedback, log_query, public_ticket, rate_ticket, record_knowledge_sync, record_student_email, record_ticket_email, stats, ticket_detail, update_ticket
+from .mail_service import (department_recipient, mail_status, save_office_emails, save_password, save_settings,
                            send_student_resolution_email, send_test_email, send_ticket_email)
 from .models import (AnswerResponse, FaqImportRequest, FaqUpsertRequest, FeedbackRequest, FeedbackResponse,
                      MailSettingsRequest, MailTestRequest, OfficeMailRequest, SearchRequest, SearchResponse,
@@ -382,6 +382,15 @@ def email_settings_save(request: MailSettingsRequest, x_admin_token: str = Heade
 def departments_get(x_admin_token: str = Header(default="")):
     require_admin(x_admin_token)
     return load_departments()
+
+
+@app.get("/api/admin/departments/stats")
+def departments_stats(x_admin_token: str = Header(default="")):
+    """各系所被分派到的詢問單筆數；系所問題統一寄到教務處信箱。"""
+    require_admin(x_admin_token)
+    stats = department_stats()
+    stats["recipient"] = department_recipient()
+    return stats
 
 
 @app.get("/api/admin/departments/defaults")
