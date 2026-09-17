@@ -11,8 +11,8 @@ from . import theme_service
 from .config import PROJECT_ROOT
 
 DEFAULT_EMAIL = os.getenv("FAQ_DEFAULT_EMAIL", "admin@example.edu.tw")
-OFFICES = ["教務處招生組", "教務處註冊課務組", "學務處生活輔導組", "學務處住宿服務組", "兩岸事務中心", "國際事務中心",
-           "總務處", "圖資處", "系辦公室", "其他行政單位"]
+OFFICES = ["教務處招生組", "教務處註冊課務組", "學務處生輔組", "學務處課外組", "學務處生涯組", "學務處諮商中心", "學務處衛保組", "學務處宿舍中心", "學務處原民中心", "學務處軍訓室", "兩岸事務中心",
+           "國際事務中心", "總務處", "圖資處", "系辦公室", "其他行政單位"]
 DEFAULT_SETTINGS = {"server": "smtp.gmail.com", "port": 587, "username": "", "from_name": "校務AI系統",
                     "subject_tag": "校務AI系統",
                     "method": "", "use_tls": True, "require_auth": True,

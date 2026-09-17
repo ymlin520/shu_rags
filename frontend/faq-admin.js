@@ -3,6 +3,16 @@ const ADMIN_TOKEN_KEY = 'school-faq-admin-token';
 const PAGE_SIZE = 50;
 const FIELDS = ['id', 'category', 'question', 'answer', 'url', 'keywords', 'office', 'email'];
 const SEARCH_FIELDS = [...FIELDS, 'updated_at', 'update_note'];
+const byId = (a, b) => String(a.id).localeCompare(String(b.id), 'en', { numeric: true });
+const text = v => String(v || '');
+const SORTS = {
+  recent: (a, b) => text(b.updated_at).localeCompare(text(a.updated_at)) || byId(a, b),
+  oldest: (a, b) => (text(a.updated_at) || '9').localeCompare(text(b.updated_at) || '9') || byId(a, b),
+  id: byId,
+  idDesc: (a, b) => byId(b, a),
+  category: (a, b) => text(a.category).localeCompare(text(b.category), 'zh-Hant') || byId(a, b),
+  office: (a, b) => text(a.office).localeCompare(text(b.office), 'zh-Hant') || byId(a, b),
+};
 let token = localStorage.getItem(ADMIN_TOKEN_KEY) || '';
 let faqs = [], summary = {}, preview = null, source = 'url', page = 1, editingId = null;
 
@@ -57,7 +67,7 @@ function filtered() {
 
 function renderList() {
   const rows = filtered(), pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
-  if ($('#sort').value === 'recent') rows.sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')));
+  const sorter = SORTS[$('#sort').value]; if (sorter) rows.sort(sorter);
   page = Math.min(Math.max(1, page), pages);
   const slice = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   $('#count').textContent = rows.length === faqs.length ? `共 ${faqs.length} 筆` : `符合 ${rows.length} 筆／共 ${faqs.length} 筆`;

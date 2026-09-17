@@ -21,7 +21,7 @@ function New-Secret([int]$Bytes = 24) {
   return [Convert]::ToBase64String($buffer).TrimEnd('=').Replace('+','-').Replace('/','_')
 }
 if (-not (Test-Path '.\admin-token.txt')) { Set-Content '.\admin-token.txt' (New-Secret) -Encoding utf8 }
-$offices = @('教務處招生組','教務處註冊課務組','學務處生活輔導組','學務處住宿服務組','兩岸事務中心','國際事務中心','總務處','圖資處','系辦公室','其他行政單位')
+$offices = @('教務處招生組','教務處註冊課務組','學務處生輔組','學務處課外組','學務處生涯組','學務處諮商中心','學務處衛保組','學務處宿舍中心','學務處原民中心','學務處軍訓室','兩岸事務中心','國際事務中心','總務處','圖資處','系辦公室','其他行政單位')
 if (-not (Test-Path '.\office-tokens.json')) {
   $tokens = [ordered]@{}
   foreach ($office in $offices) { $tokens[$office] = New-Secret 12 }

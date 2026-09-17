@@ -117,7 +117,14 @@ def delete_ticket(ticket_no: str) -> bool:
 
 
 def list_tickets(status: str = "", office: str = "") -> list[dict]:
-    sql, params = "SELECT * FROM tickets WHERE 1=1", []
+    # 一併帶出「最初 AI 分派的處室」與「人工轉單次數」，後台清單才能顯示轉單來源。
+    # 處室更名寫入的 transfer 事件 actor 是「系統」，不算人工轉單。
+    sql, params = ("SELECT t.*,"
+                   " (SELECT e.office FROM ticket_events e WHERE e.ticket_no=t.ticket_no"
+                   "  AND e.event_type='created' ORDER BY e.id LIMIT 1) AS first_office,"
+                   " (SELECT COUNT(*) FROM ticket_events e WHERE e.ticket_no=t.ticket_no"
+                   "  AND e.event_type='transfer' AND e.actor<>'系統') AS transfer_count"
+                   " FROM tickets t WHERE 1=1", [])
     if status:
         sql += " AND status=?"; params.append(status)
     if office:

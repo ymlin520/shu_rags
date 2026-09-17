@@ -26,6 +26,9 @@ FIELD_LABELS = {"id": "問題編號", "category": "分類", "question": "問題"
 SHORT_FIELDS = ("id", "category", "office", "email")  # 更新紀錄會附上前後值的短欄位
 TAIPEI = timezone(timedelta(hours=8))
 MAX_ROWS = 5000
+# 只有這些格式才當成既有題號；試算表「問題編號」欄常被填成「新增」「有更新內文」等備註，
+# 那種內容要視為沒填，改為自動配號，避免變成怪異的 FAQ ID。
+ID_RE = re.compile(r"^(?:[Qq]\d+|AUTO-[0-9a-fA-F]+|TICKET-.+)$")
 SIMILAR_THRESHOLD = 0.85  # 新題目與舊題目的題目語意相似度達此值就在預覽提醒（只提醒，不擋匯入）
 RELATED_THRESHOLD = 0.72  # 介於兩者之間只列為「相關舊題」供參考；這個模型換句話說常落在 0.72～0.85，不同題也會到 0.8 左右
 
@@ -146,8 +149,8 @@ def normalize_id(raw: Any, used: set[str] | None = None) -> str:
     value = _clean(raw)
     if value.isdigit():
         return f"Q{int(value):03d}"
-    if value:
-        return value
+    if value and ID_RE.match(value):
+        return value.upper() if value[0] in "qQ" else value
     return _next_id(used or set())
 
 
@@ -356,7 +359,7 @@ def _match_existing(row: dict[str, str], existing: dict[str, dict[str, str]], by
     """找出這一列對應的既有 FAQ：後台匯出的編號（Q001、AUTO-…）優先，其次比對題目文字。
     試算表自己編的 1、2、3 不當作既有編號，避免各處室從 1 編起就蓋掉別人的題目。"""
     raw = row["id"]
-    if raw and not raw.isdigit() and raw in existing:
+    if raw and not raw.isdigit() and ID_RE.match(raw) and raw in existing:
         return raw
     return by_question.get(_question_key(row["question"]), "")
 

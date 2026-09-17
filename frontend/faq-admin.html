@@ -1,4 +1,4 @@
-<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>常見問題管理・校務問答</title><link rel="stylesheet" href="/static/admin.css?v=20260911b"><link rel="stylesheet" href="/static/faq-admin.css?v=20260911b"></head><body><main>
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>常見問題管理・校務問答</title><link rel="stylesheet" href="/static/admin.css?v=20260911b"><link rel="stylesheet" href="/static/faq-admin.css?v=20260917-recent"></head><body><main>
 
 <header><div><small>校務問答</small><h1>常見問題管理</h1><p>匯入試算表、逐筆編輯 FAQ；存檔後前台分類與 AI 回答會立即使用新資料。</p></div><div class="header-actions"><a href="/admin">詢問單後台</a><a href="/" target="_blank" rel="noopener">前台問答 ↗</a><button id="export">匯出 CSV</button><button id="logout" hidden>登出</button></div></header>
 
@@ -38,7 +38,7 @@
 
 <section class="panel">
 <div class="section-title"><h2>所有常見問題</h2><span id="count"></span></div>
-<div class="list-toolbar"><input id="search" type="search" placeholder="搜尋編號、問題、答案或單位"><select id="category-filter"><option value="">所有分類</option></select><select id="office-filter"><option value="">所有主責單位</option></select><select id="sort"><option value="">依編號排列</option><option value="recent">最近更新在前</option></select><button id="add" class="save" type="button">＋ 新增一筆</button><button id="reindex" type="button">重建向量</button></div>
+<div class="list-toolbar"><input id="search" type="search" placeholder="搜尋編號、問題、答案或單位"><select id="category-filter"><option value="">所有分類</option></select><select id="office-filter"><option value="">所有主責單位</option></select><select id="sort" title="排序方式"><option value="recent">排序：最近更新在前</option><option value="oldest">排序：最早更新在前</option><option value="id">排序：編號由小到大</option><option value="idDesc">排序：編號由大到小</option><option value="category">排序：依分類</option><option value="office">排序：依主責單位</option></select><button id="add" class="save" type="button">＋ 新增一筆</button><button id="reindex" type="button">重建向量</button></div>
 <div class="table-wrap"><table><thead><tr><th>編號</th><th>分類</th><th>問題／建議答案</th><th>主責單位</th><th>更新時間</th><th>更新內容</th><th>來源</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>
 <div class="pager"><button id="prev" type="button">← 上一頁</button><span id="page-info"></span><button id="next" type="button">下一頁 →</button></div>
 </section>
@@ -57,4 +57,4 @@
 </form></dialog>
 
 <datalist id="category-list"></datalist><datalist id="office-list"></datalist>
-<script src="/static/faq-admin.js?v=20260911b"></script></body></html>
+<script src="/static/faq-admin.js?v=20260917-sort"></script></body></html>
