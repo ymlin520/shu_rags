@@ -284,6 +284,56 @@ def send_ticket_email(ticket: dict) -> tuple[bool, str]:
         return False, f"{type(exc).__name__}: {exc}"
 
 
+def send_ticket_ack_email(ticket: dict) -> tuple[bool, str]:
+    """回一封「已收到」確認信給提問者本人；只在 requester_contact 是有效 Email 時寄出。"""
+    settings = load_settings()
+    if not _configured(settings):
+        return False, "尚未設定寄件帳號或應用程式密碼"
+    recipient = str(ticket.get("requester_contact") or "").strip()
+    if not _EMAIL_PATTERN.match(recipient):
+        return False, "提問者未留有效 Email"
+    department = str(ticket.get("department") or "").strip()
+    unit_label = department or str(ticket.get("office") or "")
+    tokens = {"處室": unit_label, "單號": str(ticket.get("ticket_no") or "")}
+    subject_text = _mail_text("mail_ack_subject", tokens)
+    body_text = _mail_text("mail_ack_body", tokens)
+    footer_text = _mail_text("mail_ack_footer", tokens)
+    ticket_link = f"{base_url()}/ticket/{ticket['ticket_no']}?key={ticket.get('access_key', '')}"
+    message = EmailMessage()
+    message["Subject"] = f"[{_subject_tag(settings)} {ticket['ticket_no']}] {subject_text}"
+    message["From"] = _from_header(settings)
+    message["To"] = recipient
+    message["Reply-To"] = settings["username"]
+    message.set_content(
+        f"{body_text}\n\n"
+        f"詢問單編號：{ticket['ticket_no']}\n"
+        f"分派單位：{unit_label}\n"
+        f"您的問題：{ticket.get('query', '')}\n\n"
+        f"{footer_text}\n"
+    )
+    message.add_alternative(
+        "<div style=\"font-family:'Noto Sans TC',Arial,sans-serif;font-size:15px;color:#1f2933;line-height:1.7\">"
+        f"<p>{escape(body_text)}</p>"
+        "<table style=\"border-collapse:collapse;margin:16px 0\">"
+        f"<tr><td style=\"padding:4px 12px 4px 0;color:#6b7280\">詢問單編號</td>"
+        f"<td><strong>{escape(str(ticket['ticket_no']))}</strong></td></tr>"
+        f"<tr><td style=\"padding:4px 12px 4px 0;color:#6b7280\">分派單位</td>"
+        f"<td>{escape(unit_label)}</td></tr>"
+        f"<tr><td style=\"padding:4px 12px 4px 0;color:#6b7280\">您的問題</td>"
+        f"<td>{escape(str(ticket.get('query', '')))}</td></tr>"
+        "</table>"
+        + (f"<p><a href=\"{ticket_link}\" style=\"color:#2563eb\">查看詢問單進度 →</a></p>"
+           if ticket.get("access_key") else "")
+        + f"<p style=\"color:#6b7280;font-size:13px\">{escape(footer_text)}</p></div>",
+        subtype="html",
+    )
+    try:
+        _send(message)
+        return True, recipient
+    except Exception as exc:
+        return False, f"{type(exc).__name__}: {exc}"
+
+
 def student_recipient(ticket: dict, settings: dict | None = None) -> tuple[str, bool]:
     """回傳 (結案信收件人, 是否為提問者本人信箱)。
 

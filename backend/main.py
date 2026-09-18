@@ -19,8 +19,9 @@ from .department_service import (load_departments, save_departments, match_depar
 from .department_service import DEFAULTS as DEPARTMENT_DEFAULTS
 from .knowledge_service import faq_categories, sync_resolved_ticket
 from . import faq_service
-from .analytics import add_ticket_reply, create_ticket, delete_ticket, department_stats, list_tickets, log_feedback, log_query, public_ticket, rate_ticket, record_knowledge_sync, record_student_email, record_ticket_email, stats, ticket_detail, update_ticket
+from .analytics import add_ticket_reply, create_ticket, delete_ticket, department_stats, list_tickets, record_ack_email, log_feedback, log_query, public_ticket, rate_ticket, record_knowledge_sync, record_student_email, record_ticket_email, stats, ticket_detail, update_ticket
 from .mail_service import (department_recipient, mail_status, save_office_emails, save_password, save_settings,
+                           send_ticket_ack_email,
                            send_student_resolution_email, send_test_email, send_ticket_email)
 from .models import (AnswerResponse, FaqImportRequest, FaqUpsertRequest, FeedbackRequest, FeedbackResponse,
                      MailSettingsRequest, MailTestRequest, OfficeMailRequest, SearchRequest, SearchResponse,
@@ -328,6 +329,12 @@ def _notify_ticket(ticket: dict) -> None:
     record_ticket_email(ticket["ticket_no"], sent, detail)
 
 
+def _notify_requester_ack(ticket: dict) -> None:
+    """系所相關問題：回一封「已收到、已分派」確認信給提問者。"""
+    sent, detail = send_ticket_ack_email(ticket)
+    record_ack_email(ticket["ticket_no"], sent, detail)
+
+
 def _notify_student_resolution(ticket: dict) -> None:
     sent, detail, recipient = send_student_resolution_email(ticket)
     record_student_email(ticket["ticket_no"], sent, detail, recipient)
@@ -433,6 +440,8 @@ def ticket_create(request: TicketCreateRequest, background_tasks: BackgroundTask
         data["department"] = matched if matched and department_office(matched) == data["office"] else ""
     ticket = create_ticket(data)
     background_tasks.add_task(_notify_ticket, ticket)
+    if ticket.get("department"):
+        background_tasks.add_task(_notify_requester_ack, ticket)
     return ticket
 
 

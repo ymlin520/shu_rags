@@ -235,6 +235,16 @@ def record_student_email(ticket_no: str, sent: bool, detail: str, recipient: str
                    (ticket_no, "email", "系統", message))
 
 
+def record_ack_email(ticket_no: str, sent: bool, detail: str) -> None:
+    """記錄「已收到」確認信的寄送結果；沒留 Email 而略過時不寫紀錄。"""
+    if not sent and detail == "提問者未留有效 Email":
+        return
+    message = f"已寄送收件確認信給提問者 {detail}" if sent else f"收件確認信寄送失敗：{detail[:300]}"
+    with _connect() as db:
+        db.execute("INSERT INTO ticket_events(ticket_no,event_type,actor,message) VALUES(?,?,?,?)",
+                   (ticket_no, "email", "系統", message))
+
+
 def record_knowledge_sync(ticket_no: str, saved: bool, detail: str) -> None:
     with _connect() as db:
         message = f"已將本詢問單 Q&A 寫入知識庫（{detail}）" if saved else f"知識庫寫入失敗：{detail[:300]}"
