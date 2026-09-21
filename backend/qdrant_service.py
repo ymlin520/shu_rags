@@ -5,7 +5,7 @@ from typing import Any
 
 from qdrant_client import QdrantClient, models
 
-from .config import COLLECTION_NAME, PROJECT_ROOT, SCORE_THRESHOLD, VECTOR_SIZE
+from .config import COLLECTION_NAME, PROJECT_ROOT, QUESTION_SCORE_THRESHOLD, SCORE_THRESHOLD, VECTOR_SIZE
 
 _CLIENT: QdrantClient | None = None
 
@@ -58,7 +58,13 @@ def point_id(raw_id: Any) -> int | str:
         return str(uuid.uuid5(uuid.NAMESPACE_URL, f"vector-faq:{value}"))
 
 
-def upsert_faqs(records: Iterable[dict[str, Any]], vectors: list[list[float]]) -> None:
+def question_point_id(raw_id: Any) -> str:
+    """同一題的「只有題目」向量用另一個 point id，與整段向量並存。"""
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"vector-faq-question:{str(raw_id).strip()}"))
+
+
+def upsert_faqs(records: Iterable[dict[str, Any]], vectors: list[list[float]],
+                question_vectors: list[list[float]] | None = None) -> None:
     rows = list(records)
     if len(rows) != len(vectors):
         raise ValueError("FAQ 筆數與向量筆數不一致")
@@ -66,32 +72,47 @@ def upsert_faqs(records: Iterable[dict[str, Any]], vectors: list[list[float]]) -
         models.PointStruct(id=point_id(row["id"]), vector=vector, payload=row)
         for row, vector in zip(rows, vectors, strict=True)
     ]
+    if question_vectors is not None:
+        if len(question_vectors) != len(rows):
+            raise ValueError("FAQ 筆數與題目向量筆數不一致")
+        points += [
+            models.PointStruct(id=question_point_id(row["id"]), vector=vector, payload={**row, "_kind": "question"})
+            for row, vector in zip(rows, question_vectors, strict=True)
+        ]
     if points:
         get_client().upsert(collection_name=COLLECTION_NAME, points=points, wait=True)
 
 
 def delete_faqs(ids: Iterable[Any]) -> None:
-    points = [point_id(raw_id) for raw_id in ids]
+    points = [pid for raw_id in ids for pid in (point_id(raw_id), question_point_id(raw_id))]
     if points:
         get_client().delete(collection_name=COLLECTION_NAME,
                             points_selector=models.PointIdsList(points=points), wait=True)
 
 
 def search_faq(vector: list[float], limit: int) -> list[dict[str, Any]]:
+    """整段向量（門檻 SCORE_THRESHOLD）與題目向量（門檻 QUESTION_SCORE_THRESHOLD）一起查，同一題取高分。"""
     response = get_client().query_points(
         collection_name=COLLECTION_NAME,
         query=vector,
-        limit=limit,
-        score_threshold=SCORE_THRESHOLD,
+        limit=limit * 3,
+        score_threshold=min(SCORE_THRESHOLD, QUESTION_SCORE_THRESHOLD),
         with_payload=True,
     )
     fallback_date = datetime.fromtimestamp(__file_mtime()).strftime("%Y-%m-%d")
-    results = []
+    best: dict[str, dict[str, Any]] = {}
     for item in response.points:
         payload = dict(item.payload or {})
+        is_question = payload.pop("_kind", "") == "question"
+        score = float(item.score)
+        if score < (QUESTION_SCORE_THRESHOLD if is_question else SCORE_THRESHOLD):
+            continue
+        key = str(payload.get("id") or item.id)
+        if key in best and best[key]["score"] >= score:
+            continue
         payload["updated_at"] = str(payload.get("updated_at") or payload.get("updated") or fallback_date)
-        results.append({"score": float(item.score), **payload})
-    return results
+        best[key] = {"score": score, **payload}
+    return sorted(best.values(), key=lambda row: -row["score"])[:limit]
 
 
 def __file_mtime() -> float:

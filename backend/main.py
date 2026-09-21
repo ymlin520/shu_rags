@@ -253,6 +253,7 @@ def health():
             "qdrant": "connected",
             "collection": COLLECTION_NAME,
             "points": info.points_count or 0,
+            "faqs_indexed": (info.points_count or 0) // 2,  # 每題兩個向量：整段＋題目
             "llm": {key: value for key, value in ollama_status().items() if key != "model"},
         }
     except Exception as exc:

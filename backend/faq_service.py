@@ -126,7 +126,8 @@ def sync_vectors(rows: list[dict[str, str]]) -> int:
     usable = [row for row in rows if row.get("question") and row.get("answer")]
     for start in range(0, len(usable), BATCH_SIZE):
         chunk = usable[start:start + BATCH_SIZE]
-        upsert_faqs([_payload(row) for row in chunk], embed_texts([embedding_text(row) for row in chunk]))
+        upsert_faqs([_payload(row) for row in chunk], embed_texts([embedding_text(row) for row in chunk]),
+                    embed_texts([row["question"] for row in chunk]))
     return len(usable)
 
 

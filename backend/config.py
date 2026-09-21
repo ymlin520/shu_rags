@@ -7,4 +7,6 @@ EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 VECTOR_SIZE = 384
 TOP_K = 5
 SCORE_THRESHOLD = 0.45
+# 只比題目的向量：短句彼此相似度偏高，門檻要拉高才不會亂配（0.65 會把「被當怎麼補修」配到「減修」）
+QUESTION_SCORE_THRESHOLD = 0.7
 BATCH_SIZE = 100
