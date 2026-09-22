@@ -1,4 +1,5 @@
 import os
+import re
 
 import opencc
 import requests
@@ -8,6 +9,9 @@ from .department_service import department_office, has_priority_word, match_depa
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
+# 相關性檢查用較大的模型：3B 幾乎一律判「無」，9B 在 18 題測試中全對、暖機後每次約 0.2 秒
+RELEVANCE_MODEL = os.getenv("FAQ_RELEVANCE_MODEL", "qwen3.5:9b")
+RELEVANCE_KEEP_ALIVE = "24h"  # 冷啟動要 30 秒，常駐避免學生第一個問題卡住
 _S2T = opencc.OpenCC("s2t")
 # 模型偶爾會吐出簡體字，逐字轉回繁體。
 # 逐字轉換（不走片語規則）可避免動到台灣慣用寫法；下列是知識庫本來就在用、
@@ -102,6 +106,47 @@ def ollama_status() -> dict[str, str | bool]:
         return {"connected": True, "model": OLLAMA_MODEL, "available": available}
     except requests.RequestException:
         return {"connected": False, "model": OLLAMA_MODEL, "available": False}
+
+
+_RELEVANCE_PROMPT = (
+    "你是校務問答的資料審核員。判斷下列每一題 FAQ，能不能直接回答使用者的問題。\n"
+    "只有當 FAQ 談的是同一件事時才算能回答；只是字面相似（例如「借教室」與「就學貸款」都有借字）不算。\n"
+    "只輸出能回答的 FAQ 編號，用逗號分隔；都不能回答就輸出「無」。不要解釋。"
+)
+
+
+def filter_relevant(query: str, results: list[dict]) -> list[dict] | None:
+    """回傳真正能回答問題的 FAQ（可能是空清單）；檢查模型無法使用時回傳 None，呼叫端沿用原結果。"""
+    if not results:
+        return []
+    listing = "\n".join(f"{i}. {x.get('question', '')}｜{str(x.get('answer', ''))[:80]}"
+                        for i, x in enumerate(results, start=1))
+    try:
+        response = requests.post(
+            f"{OLLAMA_URL}/api/chat",
+            json={"model": RELEVANCE_MODEL, "stream": False, "think": False,
+                  "messages": [{"role": "system", "content": _RELEVANCE_PROMPT},
+                               {"role": "user", "content": f"使用者問題：{query}\n\nFAQ：\n{listing}"}],
+                  "options": {"temperature": 0, "num_predict": 20}, "keep_alive": RELEVANCE_KEEP_ALIVE},
+            timeout=60,
+        )
+        response.raise_for_status()
+        verdict = response.json().get("message", {}).get("content", "").strip()
+    except (requests.RequestException, ValueError):
+        return None
+    picks = {int(n) for n in re.findall(r"\d+", verdict) if 1 <= int(n) <= len(results)}
+    if not picks and "無" not in verdict:
+        return None  # 輸出看不懂就不要擋，避免誤殺正常回答
+    return [item for i, item in enumerate(results, start=1) if i in picks]
+
+
+def warm_up_relevance_model() -> None:
+    """啟動時先把相關性檢查模型載入顯示卡。"""
+    try:
+        requests.post(f"{OLLAMA_URL}/api/generate",
+                      json={"model": RELEVANCE_MODEL, "prompt": "", "keep_alive": RELEVANCE_KEEP_ALIVE}, timeout=180)
+    except requests.RequestException:
+        pass
 
 
 def answer_from_faq(query: str, results: list[dict]) -> str:

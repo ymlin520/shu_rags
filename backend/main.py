@@ -1,4 +1,5 @@
 import logging
+import threading
 import csv
 import io
 import json
@@ -13,7 +14,8 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import COLLECTION_NAME, PROJECT_ROOT
 from .embedding import embed_text
-from .llm_service import site_text, answer_from_faq, ollama_status, route_ticket
+from .llm_service import (site_text, answer_from_faq, filter_relevant, ollama_status, route_ticket,
+                          warm_up_relevance_model)
 from .department_service import (load_departments, save_departments, match_department,
                                  department_office, department_by_token, ensure_tokens)
 from .department_service import DEFAULTS as DEPARTMENT_DEFAULTS
@@ -36,6 +38,7 @@ logger = logging.getLogger("vector-faq")
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     logger.info("FAQ API 啟動")
+    threading.Thread(target=warm_up_relevance_model, daemon=True).start()
     try:
         yield
     finally:
@@ -290,6 +293,11 @@ def ask(request: SearchRequest):
     started = time.perf_counter()
     try:
         results = search_faq(embed_text(request.query), max(request.limit, 5))
+        # 向量搜尋只看字面相似（「借教室」會配到「就學貸款」），先讓模型確認來源真的在回答這個問題
+        relevant = filter_relevant(request.query, results)
+        if relevant is not None and len(relevant) != len(results):
+            logger.info("相關性檢查 query=%r 保留 %d/%d 筆", request.query, len(relevant), len(results))
+            results = relevant
         log_query(request.query, results)
         if not results:
             return {"query": request.query, "answer": site_text("ai_no_info"), "results": [], "generated": False, "model": "", "notice": "未找到相關 FAQ", "followups": [], "steps": []}
