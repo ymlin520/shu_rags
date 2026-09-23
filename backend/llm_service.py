@@ -176,13 +176,24 @@ def answer_from_faq(query: str, results: list[dict]) -> str:
                 {"role": "system", "content": system},
                 {"role": "user", "content": f"使用者問題：{query}\n\n可用 FAQ：\n{context}\n\n請直接輸出最終回答。"},
             ],
-            "options": {"temperature": 0.1, "num_predict": 300},
+            # 300 會把「學生證不見怎麼辦？」這種多步驟流程砍在句子中間（2026-09-23 修）
+            "options": {"temperature": 0.1, "num_predict": 900},
             "keep_alive": "10m",
         },
         timeout=180,
     )
     response.raise_for_status()
-    answer = to_traditional(response.json().get("message", {}).get("content", "").strip())
+    payload = response.json()
+    answer = to_traditional(payload.get("message", {}).get("content", "").strip())
     if not answer:
         raise RuntimeError("地端模型未回傳回答")
+    if payload.get("done_reason") == "length":
+        answer = _trim_incomplete_tail(answer)
     return answer
+
+
+def _trim_incomplete_tail(answer: str) -> str:
+    """萬一還是被長度上限截斷，退回最後一個完整句子，不要停在半句。"""
+    cut = max(answer.rfind(mark) for mark in "。！？；")
+    trimmed = answer[:cut + 1].rstrip() if cut > 0 else ""
+    return trimmed or answer
