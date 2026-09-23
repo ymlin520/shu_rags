@@ -38,3 +38,4 @@ data/site-theme-override.css
 department-emails.json
 department-tokens.json
 department-login-codes.txt
+.gstack/

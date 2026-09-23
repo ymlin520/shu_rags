@@ -11,3 +11,7 @@
   font-size:14px;font-weight:700;cursor:pointer}
 .settle button.undo{background:#fff;color:#b91c1c;border:1px solid #f0c2c2}
 .settle .settle-hint{color:#6b7280;font-size:12px;line-height:1.6}
+
+/* 回覆區的勾選框：與文字同一行 */
+.reply label.faq-opt{display:flex;align-items:flex-start;gap:8px;margin:12px 0;font-size:13px;color:#555;line-height:1.6;cursor:pointer}
+.reply label.faq-opt input[type=checkbox]{flex:none;width:16px;height:16px;margin:2px 0 0;accent-color:#e6532d}
