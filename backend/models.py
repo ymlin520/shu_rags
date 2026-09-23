@@ -70,6 +70,12 @@ class TicketUpdateRequest(BaseModel):
     department: str = Field(default="", max_length=100)
 
 
+class TicketSettleRequest(BaseModel):
+    settled: bool = True
+    actor: str = Field(default="", max_length=100)
+    note: str = Field(default="", max_length=500)
+
+
 class TicketRateRequest(BaseModel):
     access_key: str = Field(min_length=16, max_length=100)
     rating: int = Field(ge=1, le=5)

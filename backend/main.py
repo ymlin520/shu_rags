@@ -21,12 +21,13 @@ from .department_service import (load_departments, save_departments, match_depar
 from .department_service import DEFAULTS as DEPARTMENT_DEFAULTS
 from .knowledge_service import faq_categories, sync_resolved_ticket
 from . import faq_service
-from .analytics import add_ticket_reply, create_ticket, delete_ticket, department_stats, list_tickets, record_ack_email, log_feedback, log_query, public_ticket, rate_ticket, record_knowledge_sync, record_student_email, record_ticket_email, stats, ticket_detail, update_ticket
+from .analytics import add_ticket_reply, create_ticket, delete_ticket, department_stats, set_ticket_settled, settle_stats, list_tickets, record_ack_email, log_feedback, log_query, public_ticket, rate_ticket, record_knowledge_sync, record_student_email, record_ticket_email, stats, ticket_detail, update_ticket
 from .mail_service import (department_recipient, mail_status, save_office_emails, save_password, save_settings,
                            send_ticket_ack_email,
                            send_student_resolution_email, send_test_email, send_ticket_email)
 from .models import (AnswerResponse, FaqImportRequest, FaqUpsertRequest, FeedbackRequest, FeedbackResponse,
                      MailSettingsRequest, MailTestRequest, OfficeMailRequest, SearchRequest, SearchResponse,
+                     TicketSettleRequest,
                      TicketCreateRequest, TicketRateRequest, TicketReplyRequest, TicketUpdateRequest)
 from .qdrant_service import check_connection, close_client, collection_info, search_faq
 from . import theme_service
@@ -232,7 +233,7 @@ def require_office_scope(token: str) -> tuple[str, str]:
     """回傳 (處室, 系所)。系所登入碼只看得到分派給該系所的詢問單。"""
     department = department_by_token(token)
     if department:
-        return department_office(department) or "系辦公室", department
+        return department_office(department) or "教務處註冊課務組", department
     path = PROJECT_ROOT / "office-tokens.json"
     if not path.exists(): raise HTTPException(status_code=503, detail="尚未設定處室帳號")
     tokens = json.loads(path.read_text(encoding="utf-8-sig"))
@@ -480,9 +481,9 @@ def ticket_public_rate(ticket_no: str, request: TicketRateRequest):
 
 
 @app.get("/api/admin/tickets")
-def tickets_get(status: str = "", office: str = "", x_admin_token: str = Header(default="")):
+def tickets_get(status: str = "", office: str = "", settled: str = "", x_admin_token: str = Header(default="")):
     require_admin(x_admin_token)
-    return {"tickets": list_tickets(status, office)}
+    return {"tickets": list_tickets(status, office, settled=settled)}
 
 
 @app.get("/api/office/tickets")
@@ -556,6 +557,35 @@ def ticket_update(ticket_no: str, request: TicketUpdateRequest, background_tasks
         background_tasks.add_task(_notify_student_resolution, ticket)
         background_tasks.add_task(_sync_ticket_knowledge, ticket)
     return ticket
+
+
+@app.post("/api/admin/tickets/{ticket_no}/settle")
+def ticket_settle_admin(ticket_no: str, request: TicketSettleRequest, x_admin_token: str = Header(default="")):
+    """管理者標記／取消核銷；核銷不會刪除詢問單。"""
+    require_admin(x_admin_token)
+    ticket = set_ticket_settled(ticket_no, request.settled, request.actor or "管理者", request.note)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="找不到詢問單")
+    logger.info("詢問單核銷 ticket=%s settled=%s", ticket_no, request.settled)
+    return ticket
+
+
+@app.post("/api/office/tickets/{ticket_no}/settle")
+def ticket_settle_office(ticket_no: str, request: TicketSettleRequest, x_office_token: str = Header(default="")):
+    office, department = require_office_scope(x_office_token)
+    rows = [x for x in list_tickets(office=office, department=department) if x["ticket_no"] == ticket_no]
+    if not rows:
+        raise HTTPException(status_code=404, detail="找不到分派給本單位的詢問單")
+    ticket = set_ticket_settled(ticket_no, request.settled, request.actor or (department or office), request.note)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="找不到詢問單")
+    return ticket
+
+
+@app.get("/api/admin/settle/stats")
+def settle_statistics(days: int = 0, x_admin_token: str = Header(default="")):
+    require_admin(x_admin_token)
+    return settle_stats(days)
 
 
 @app.delete("/api/admin/tickets/{ticket_no}")

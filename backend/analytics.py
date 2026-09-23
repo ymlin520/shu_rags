@@ -88,6 +88,14 @@ def _connect() -> sqlite3.Connection:
         connection.execute("ALTER TABLE tickets ADD COLUMN student_email_error TEXT NOT NULL DEFAULT ''")
     if "department" not in columns:
         connection.execute("ALTER TABLE tickets ADD COLUMN department TEXT NOT NULL DEFAULT ''")
+    if "settled" not in columns:  # 核銷：不是刪除，是另一個狀態
+        connection.execute("ALTER TABLE tickets ADD COLUMN settled INTEGER NOT NULL DEFAULT 0")
+    if "settled_at" not in columns:
+        connection.execute("ALTER TABLE tickets ADD COLUMN settled_at TEXT")
+    if "settled_by" not in columns:
+        connection.execute("ALTER TABLE tickets ADD COLUMN settled_by TEXT NOT NULL DEFAULT ''")
+    if "settle_note" not in columns:
+        connection.execute("ALTER TABLE tickets ADD COLUMN settle_note TEXT NOT NULL DEFAULT ''")
     return connection
 
 
@@ -121,7 +129,8 @@ def delete_ticket(ticket_no: str) -> bool:
         return True
 
 
-def list_tickets(status: str = "", office: str = "", department: str = "") -> list[dict]:
+def list_tickets(status: str = "", office: str = "", department: str = "",
+                 settled: str = "") -> list[dict]:
     # 一併帶出「最初 AI 分派的處室」與「人工轉單次數」，後台清單才能顯示轉單來源。
     # 處室更名寫入的 transfer 事件 actor 是「系統」，不算人工轉單。
     sql, params = ("SELECT t.*,"
@@ -136,12 +145,60 @@ def list_tickets(status: str = "", office: str = "", department: str = "") -> li
         sql += " AND office=?"; params.append(office)
     if department:
         sql += " AND department=?"; params.append(department)
+    if settled in ("1", "0"):
+        sql += " AND settled=?"; params.append(int(settled))
     sql += " ORDER BY CASE status WHEN '待處理' THEN 0 WHEN '處理中' THEN 1 ELSE 2 END, id DESC"
     with _connect() as db:
         result = []
         for row in db.execute(sql, params).fetchall():
             item = _local(row); item.pop("access_key", None); result.append(item)
         return result
+
+
+def set_ticket_settled(ticket_no: str, settled: bool, actor: str = "", note: str = "") -> dict | None:
+    """標記／取消核銷。核銷不會刪除詢問單，只是多一個狀態與紀錄。"""
+    with _connect() as db:
+        current = db.execute("SELECT * FROM tickets WHERE ticket_no=?", (ticket_no,)).fetchone()
+        if not current:
+            return None
+        actor = (actor or "承辦單位").strip()[:100]
+        note = (note or "").strip()[:500]
+        if settled:
+            db.execute("UPDATE tickets SET settled=1,settled_at=CURRENT_TIMESTAMP,settled_by=?,settle_note=?,"
+                       "updated_at=CURRENT_TIMESTAMP WHERE ticket_no=?", (actor, note, ticket_no))
+            message = f"已核銷{f'（{note}）' if note else ''}"
+        else:
+            db.execute("UPDATE tickets SET settled=0,settled_at=NULL,settled_by='',settle_note='',"
+                       "updated_at=CURRENT_TIMESTAMP WHERE ticket_no=?", (ticket_no,))
+            message = "已取消核銷"
+        db.execute("INSERT INTO ticket_events(ticket_no,event_type,actor,message,office) VALUES(?,?,?,?,?)",
+                   (ticket_no, "settle", actor, message, current["office"]))
+        row = db.execute("SELECT * FROM tickets WHERE ticket_no=?", (ticket_no,)).fetchone()
+        return _local(row) if row else None
+
+
+def settle_stats(days: int = 0) -> dict:
+    """核銷統計：全部與最近 N 天（days=0 代表不限期間）。"""
+    where, params = "", []
+    if days:
+        where, params = " WHERE created_at >= datetime('now', ?)", [f"-{int(days)} days"]
+    with _connect() as db:
+        row = db.execute(
+            "SELECT COUNT(*) total, SUM(settled) settled,"
+            " SUM(CASE WHEN settled=0 AND status='已解決' THEN 1 ELSE 0 END) resolved_unsettled"
+            f" FROM tickets{where}", params).fetchone()
+        by_office = db.execute(
+            "SELECT office, COUNT(*) total, SUM(settled) settled FROM tickets"
+            f"{where} GROUP BY office ORDER BY settled DESC, total DESC", params).fetchall()
+        recent = db.execute(
+            "SELECT t.ticket_no, t.subject, t.office, t.department, t.settled_at, t.settled_by, t.settle_note"
+            " FROM tickets t WHERE t.settled=1 ORDER BY t.settled_at DESC LIMIT 20").fetchall()
+    total = int(row["total"] or 0)
+    settled = int(row["settled"] or 0)
+    return {"total": total, "settled": settled, "unsettled": total - settled,
+            "resolved_unsettled": int(row["resolved_unsettled"] or 0),
+            "rate": round(settled / total * 100, 1) if total else 0.0,
+            "offices": [_local(x) for x in by_office], "recent": [_local(x) for x in recent]}
 
 
 def department_stats() -> dict:
@@ -341,6 +398,10 @@ def stats(days: int = 7) -> dict:
                FROM tickets WHERE created_at >= datetime('now', ?) AND status!='已解決'
                ORDER BY waiting_hours DESC, id DESC LIMIT 8""", (since,)
         ).fetchall()
+        settle_row = db.execute(
+            """SELECT COUNT(*) total, SUM(settled) settled FROM tickets
+               WHERE created_at >= datetime('now', ?)""", (since,)
+        ).fetchone()
     total_feedback = int(feedback["total"] or 0)
     helpful = int(feedback["helpful"] or 0)
     rating_count = int(ticket_summary["rating_count"] or 0)
@@ -378,6 +439,10 @@ def stats(days: int = 7) -> dict:
         "ticket_pending": int(ticket_summary["pending"] or 0),
         "ticket_processing": int(ticket_summary["processing"] or 0),
         "ticket_resolved": int(ticket_summary["resolved"] or 0),
+        "settled_count": int(settle_row["settled"] or 0),
+        "settled_rate": round(int(settle_row["settled"] or 0) / int(settle_row["total"]) * 100, 1)
+        if int(settle_row["total"] or 0) else 0.0,
+        "settle_pending": int(settle_row["total"] or 0) - int(settle_row["settled"] or 0),
         "transfer_count": int(transfer_summary["transfer_count"] or 0),
         "transferred_tickets": int(transfer_summary["transferred_tickets"] or 0),
         "transfer_rate": round(int(transfer_summary["transferred_tickets"] or 0) / int(ticket_summary["total"] or 1) * 100, 1),

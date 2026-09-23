@@ -37,7 +37,7 @@ def to_traditional(text: str) -> str:
 
 
 OFFICES = ["教務處招生組", "教務處註冊課務組", "學務處生輔組", "學務處課外組", "學務處生涯組", "學務處諮商中心", "學務處衛保組", "學務處宿舍中心", "學務處原民中心", "學務處軍訓室", "兩岸事務中心",
-           "國際事務中心", "總務處", "圖資處", "系辦公室", "其他行政單位"]
+           "國際事務中心", "總務處", "圖資處", "其他行政單位"]
 
 
 def _fallback_office(text: str) -> str:
@@ -49,15 +49,15 @@ def _fallback_office(text: str) -> str:
         ("學務處軍訓室", ["軍訓", "兵役", "服役", "校安", "學生安全"]),
         ("學務處課外組", ["社團", "社課", "學生會", "系學會", "課外"]),
         ("學務處生涯組", ["職涯", "徵才", "就業", "履歷", "求職"]),
-        ("學務處生輔組", ["助學貸款", "就學貸款", "獎助學金", "獎學金", "助學金", "獎懲", "操行", "急難", "請假", "學生申訴"]),
+        ("學務處生輔組", ["助學貸款", "就學貸款", "獎助學金", "獎學金", "助學金", "獎懲", "操行", "急難", "請假", "學生申訴", "導師"]),
         ("教務處招生組", ["招生", "報考", "簡章", "甄試", "甄選", "分發", "考試入學", "轉學考", "招生說明會"]),
         ("教務處註冊課務組", ["學籍", "成績", "畢業證書", "休學", "復學", "轉學", "註冊", "抵免", "入學", "選課", "課程", "學分", "加退選", "停修", "教室",
+                      "系所", "系辦", "專題",
                       "排課"]),
         ("兩岸事務中心", ["陸生", "港澳", "香港", "澳門", "大陸", "中國", "兩岸"]),
         ("國際事務中心", ["交換", "海外", "外籍", "外國學生", "國際學生", "留學", "國際"]),
         ("圖資處", ["圖書館", "借書", "電子資源", "資料庫", "閱覽", "帳號", "密碼", "系統", "網路", "wifi", "登入", "校務系統"]),
         ("總務處", ["停車", "場地", "修繕", "繳費", "收據", "門禁"]),
-        ("系辦公室", ["實習", "系所", "專題", "導師", "系辦"]),
     ]
     lowered = text.lower()
     for office, words in rules:
@@ -72,9 +72,7 @@ def route_ticket(query: str, description: str = "") -> tuple[str, str]:
     department = match_department(text)
     # 題目同時出現系所名稱與系所級業務字（系辦、導師、必修…）時，系所蓋過處室關鍵字
     if department and (keyword_choice == "其他行政單位" or has_priority_word(text)):
-        return department_office(department) or "系辦公室", department
-    if keyword_choice == "系辦公室":
-        return keyword_choice, department
+        return department_office(department) or "教務處註冊課務組", department
     if keyword_choice != "其他行政單位":
         return keyword_choice, ""
     try:
@@ -87,7 +85,8 @@ def route_ticket(query: str, description: str = "") -> tuple[str, str]:
         response.raise_for_status()
         choice = response.json().get("message", {}).get("content", "").strip()
         for office in OFFICES:
-            if office in choice: return office, (department if office == "系辦公室" else "")
+            if office in choice:
+                return office, (department if office in ("教務處註冊課務組", "其他行政單位") else "")
     except (requests.RequestException, ValueError):
         pass
     return keyword_choice, ""
@@ -159,7 +158,7 @@ def answer_from_faq(query: str, results: list[dict]) -> str:
         )
     context = "\n\n".join(context_blocks)
     system = (
-        "你是系辦公室 FAQ 助理。全部內容一律使用臺灣繁體中文，絕對不可出現任何簡體字，"
+        "你是世新大學校務問答助理。全部內容一律使用臺灣繁體中文，絕對不可出現任何簡體字，"
         "以親切、清楚、自然的語氣回答。"
         "只能根據提供的 FAQ 內容作答，不得加入常識推測、虛構規定、日期、流程或聯絡方式。"
         f"若資料不足，請明確說『{site_text('ai_no_info')}』。"
