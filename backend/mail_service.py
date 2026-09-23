@@ -12,8 +12,11 @@ from .department_service import department_email, department_login_code, load_de
 from .config import PROJECT_ROOT
 
 DEFAULT_EMAIL = os.getenv("FAQ_DEFAULT_EMAIL", "admin@example.edu.tw")
-OFFICES = ["教務處招生組", "教務處註冊課務組", "學務處生輔組", "學務處課外組", "學務處生涯組", "學務處諮商中心", "學務處衛保組", "學務處宿舍中心", "學務處原民中心", "學務處軍訓室", "兩岸事務中心",
-           "國際事務中心", "總務處", "圖資處", "其他行政單位"]
+OFFICES = [
+    "教務處招生組", "教務處註冊課務組", "學務處生輔組", "學務處課外組", "學務處生涯組", "學務處諮商中心", "學務處衛保組", "學務處宿舍中心", "學務處原民中心", "學務處軍訓室",
+    "兩岸事務中心", "國際事務中心", "總務處", "圖書資訊處-網路組", "圖書資訊處-系統組", "圖書資訊處-圖書資訊服務組", "教學發展中心-企劃管考組", "教學發展中心-教學資源組", "秘書室",
+    "人事室", "會計室", "稽核室", "公共事務室", "社會資源發展中心", "舍我紀念館", "民意調查中心", "世新電台", "其他行政單位",
+]
 DEFAULT_SETTINGS = {"server": "smtp.gmail.com", "port": 587, "username": "", "from_name": "校務AI系統",
                     "subject_tag": "校務AI系統",
                     "method": "", "use_tls": True, "require_auth": True,
