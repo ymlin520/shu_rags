@@ -88,7 +88,7 @@ def _connect() -> sqlite3.Connection:
         connection.execute("ALTER TABLE tickets ADD COLUMN student_email_error TEXT NOT NULL DEFAULT ''")
     if "department" not in columns:
         connection.execute("ALTER TABLE tickets ADD COLUMN department TEXT NOT NULL DEFAULT ''")
-    if "settled" not in columns:  # 核銷：不是刪除，是另一個狀態
+    if "settled" not in columns:  # 銷案：不是刪除，是另一個狀態
         connection.execute("ALTER TABLE tickets ADD COLUMN settled INTEGER NOT NULL DEFAULT 0")
     if "settled_at" not in columns:
         connection.execute("ALTER TABLE tickets ADD COLUMN settled_at TEXT")
@@ -156,7 +156,7 @@ def list_tickets(status: str = "", office: str = "", department: str = "",
 
 
 def set_ticket_settled(ticket_no: str, settled: bool, actor: str = "", note: str = "") -> dict | None:
-    """標記／取消核銷。核銷不會刪除詢問單，只是多一個狀態與紀錄。"""
+    """標記／取消銷案。銷案不會刪除詢問單，只是多一個狀態與紀錄。"""
     with _connect() as db:
         current = db.execute("SELECT * FROM tickets WHERE ticket_no=?", (ticket_no,)).fetchone()
         if not current:
@@ -166,11 +166,11 @@ def set_ticket_settled(ticket_no: str, settled: bool, actor: str = "", note: str
         if settled:
             db.execute("UPDATE tickets SET settled=1,settled_at=CURRENT_TIMESTAMP,settled_by=?,settle_note=?,"
                        "updated_at=CURRENT_TIMESTAMP WHERE ticket_no=?", (actor, note, ticket_no))
-            message = f"已核銷{f'（{note}）' if note else ''}"
+            message = f"已銷案{f'（{note}）' if note else ''}"
         else:
             db.execute("UPDATE tickets SET settled=0,settled_at=NULL,settled_by='',settle_note='',"
                        "updated_at=CURRENT_TIMESTAMP WHERE ticket_no=?", (ticket_no,))
-            message = "已取消核銷"
+            message = "已取消銷案"
         db.execute("INSERT INTO ticket_events(ticket_no,event_type,actor,message,office) VALUES(?,?,?,?,?)",
                    (ticket_no, "settle", actor, message, current["office"]))
         row = db.execute("SELECT * FROM tickets WHERE ticket_no=?", (ticket_no,)).fetchone()
@@ -178,14 +178,14 @@ def set_ticket_settled(ticket_no: str, settled: bool, actor: str = "", note: str
 
 
 def settle_stats(days: int = 0) -> dict:
-    """核銷統計：全部與最近 N 天（days=0 代表不限期間）。"""
+    """銷案統計：全部與最近 N 天（days=0 代表不限期間）。"""
     where, params = "", []
     if days:
         where, params = " WHERE created_at >= datetime('now', ?)", [f"-{int(days)} days"]
     with _connect() as db:
         row = db.execute(
             "SELECT COUNT(*) total, SUM(settled) settled,"
-            " SUM(CASE WHEN settled=0 AND status='已解決' THEN 1 ELSE 0 END) resolved_unsettled"
+            " SUM(CASE WHEN settled=1 AND created_at >= datetime('now','-30 days') THEN 1 ELSE 0 END) settled_30d"
             f" FROM tickets{where}", params).fetchone()
         by_office = db.execute(
             "SELECT office, COUNT(*) total, SUM(settled) settled FROM tickets"
@@ -196,7 +196,8 @@ def settle_stats(days: int = 0) -> dict:
     total = int(row["total"] or 0)
     settled = int(row["settled"] or 0)
     return {"total": total, "settled": settled, "unsettled": total - settled,
-            "resolved_unsettled": int(row["resolved_unsettled"] or 0),
+            "settled_30d": int(row["settled_30d"] or 0),
+            "valid": total - settled,
             "rate": round(settled / total * 100, 1) if total else 0.0,
             "offices": [_local(x) for x in by_office], "recent": [_local(x) for x in recent]}
 

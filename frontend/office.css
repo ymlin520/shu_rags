@@ -2,3 +2,7 @@
 .mail-card{display:grid;grid-template-columns:1fr minmax(320px,460px);gap:28px;align-items:center;background:var(--paper);border:1px solid var(--line);border-left:5px solid var(--accent);border-radius:14px;padding:20px 22px;margin:0 0 22px}.mail-card h2{margin:3px 0 6px}.mail-card p{margin:0;color:#716b65}.mail-card form{display:grid;grid-template-columns:1fr auto;gap:9px;align-items:end}.mail-card label{display:grid;gap:5px;font-size:13px;font-weight:700}.mail-card input{width:100%;padding:11px;border:1px solid var(--line);border-radius:8px;font:inherit}.mail-card button{padding:11px 16px;border:0;border-radius:8px;background:var(--accent);color:#fff;font-weight:700;white-space:nowrap}.mail-card button:disabled{opacity:.6}.mail-card form p{grid-column:1/-1;font-size:13px}.mail-card .ok{color:#187346}.mail-card .err{color:#c43c22}
 @media(max-width:760px){.mail-card{grid-template-columns:1fr}.mail-card form{grid-template-columns:1fr}.mail-card form p{grid-column:auto}}
 @media(max-width:700px){.ticket{grid-template-columns:1fr}.ticket b:last-child{text-align:right}nav{overflow:auto}header{align-items:start}}
+
+/* 顯示已銷案 */
+.show-settled{display:inline-flex;align-items:center;gap:6px;margin-left:8px;color:#6b7280;font-size:13px}
+.ticket .badge.settled{background:#fee2e2;color:#b91c1c}

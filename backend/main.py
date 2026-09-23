@@ -487,10 +487,11 @@ def tickets_get(status: str = "", office: str = "", settled: str = "", x_admin_t
 
 
 @app.get("/api/office/tickets")
-def office_tickets(status: str = "", x_office_token: str = Header(default="")):
+def office_tickets(status: str = "", settled: str = "", x_office_token: str = Header(default="")):
+    """settled=0 代表不含已銷案（處室清單預設值），空字串代表全部。"""
     office, department = require_office_scope(x_office_token)
     return {"office": office, "department": department, "unit": department or office,
-            "tickets": list_tickets(status, office, department)}
+            "tickets": list_tickets(status, office, department, settled=settled)}
 
 
 @app.get("/api/office/mail")
@@ -561,12 +562,12 @@ def ticket_update(ticket_no: str, request: TicketUpdateRequest, background_tasks
 
 @app.post("/api/admin/tickets/{ticket_no}/settle")
 def ticket_settle_admin(ticket_no: str, request: TicketSettleRequest, x_admin_token: str = Header(default="")):
-    """管理者標記／取消核銷；核銷不會刪除詢問單。"""
+    """管理者標記／取消銷案；銷案不會刪除詢問單。"""
     require_admin(x_admin_token)
     ticket = set_ticket_settled(ticket_no, request.settled, request.actor or "管理者", request.note)
     if not ticket:
         raise HTTPException(status_code=404, detail="找不到詢問單")
-    logger.info("詢問單核銷 ticket=%s settled=%s", ticket_no, request.settled)
+    logger.info("詢問單銷案 ticket=%s settled=%s", ticket_no, request.settled)
     return ticket
 
 
