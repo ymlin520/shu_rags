@@ -6,6 +6,7 @@ import requests
 
 from . import theme_service
 from .department_service import department_office, has_priority_word, match_department
+from .routing_rules import normalize_office, score_offices, scope_lines
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
@@ -43,46 +44,54 @@ OFFICES = [
 ]
 
 
-def _fallback_office(text: str) -> str:
-    rules = [
-        ("學務處宿舍中心", ["宿舍", "住宿", "床位", "退宿", "寢室"]),
-        ("學務處原民中心", ["原住民", "原民", "族語"]),
-        ("學務處諮商中心", ["心理諮商", "諮商", "心理", "情緒", "壓力"]),
-        ("學務處衛保組", ["健檢", "健康檢查", "保健", "衛保", "急救", "傷病", "生命救助", "健康"]),
-        ("學務處軍訓室", ["軍訓", "兵役", "服役", "校安", "學生安全"]),
-        ("學務處課外組", ["社團", "社課", "學生會", "系學會", "課外"]),
-        ("學務處生涯組", ["職涯", "徵才", "就業", "履歷", "求職"]),
-        ("學務處生輔組", ["助學貸款", "就學貸款", "獎助學金", "獎學金", "助學金", "獎懲", "操行", "急難", "請假", "學生申訴", "導師"]),
-        ("教學發展中心-教學資源組", ["專業教室", "實作設備", "數位影音", "ai教學", "攝影設備", "攝影專業設備", "燈光", "教學設備", "教學資源"]),
-        ("教學發展中心-企劃管考組", ["教學發展", "計畫管考", "績效管考", "教師專業發展", "教學創新", "教學品質", "ta助教", "助教"]),
-        ("圖書資訊處-圖書資訊服務組", [
-            "圖書館", "館藏", "借書", "還書", "借閱", "館際", "校際借閱", "資料檢索", "論文系統", "電子資源", "資料庫", "閱覽", "六樓", "6樓"
-        ]),
-        ("圖書資訊處-網路組", ["無線網路", "wifi", "vpn", "網路", "麥克風", "投影機", "電腦設備", "桌機", "電腦教室", "信箱", "email", "電子郵件", "光廊電視"]),
-        ("圖書資訊處-系統組", ["山洞口", "教務系統", "招生系統", "tronclass", "校網", "帳號", "密碼", "登入", "校務系統", "系統", "電算中心"]),
-        ("秘書室", ["公文", "文書", "收發", "包裹", "信件", "組織規程", "校務會議", "印信"]),
-        ("人事室", ["人事", "聘任", "差勤", "勞保", "健保", "私校保", "教職員福利", "薪資", "職員"]),
-        ("會計室", ["收費標準", "退費標準", "學雜費收費", "退費", "經費核銷", "請購", "預算"]),
-        ("稽核室", ["稽核", "內部控制", "內控"]),
-        ("民意調查中心", ["民調", "民意調查", "電話訪問", "調查委託"]),
-        ("公共事務室", ["公關", "新聞稿", "媒體採訪", "校園新聞", "新聞報導", "媒體報導"]),
-        ("社會資源發展中心", ["校友", "捐款", "募款", "校友會"]),
-        ("舍我紀念館", ["校史", "創辦人", "舍我", "紀念館", "學校歷史"]),
-        ("世新電台", ["世新電台", "世新電臺", "廣播電台", "廣播電臺", "podcast", "fm88.1", "am729", "電台實習"]),
-        ("教務處招生組", ["招生", "報考", "簡章", "甄試", "甄選", "分發", "考試入學", "轉學考", "招生說明會"]),
-        ("教務處註冊課務組", [
-            "學籍", "成績", "畢業證書", "休學", "復學", "轉學", "註冊", "抵免", "入學", "選課", "課程", "學分", "加退選", "停修", "教室", "系所", "系辦",
-            "專題", "排課"
-        ]),
-        ("兩岸事務中心", ["陸生", "港澳", "香港", "澳門", "大陸", "中國", "兩岸"]),
-        ("國際事務中心", ["交換", "海外", "外籍", "外國學生", "國際學生", "留學", "國際"]),
-        ("總務處", ["停車", "場地", "修繕", "繳費", "收據", "門禁"]),
-    ]
-    lowered = text.lower()
-    for office, words in rules:
-        if any(word.lower() in lowered for word in words): return office
-    return "其他行政單位"
+# 名稱相近、模型容易分錯的處室，補上業務範圍說明
+# 關鍵字命中太弱時（分數低於門檻或前兩名差距太小）就交給模型判斷。
+ROUTE_MIN_SCORE = 4      # 例如「宿舍」(2字×權重1×2) 這種單一短字不算有把握
+ROUTE_MIN_MARGIN = 2     # 第一名至少要贏第二名這麼多
 
+
+def _fallback_office(text: str) -> str:
+    """純關鍵字計分的結果（分數最高者）；都沒命中回「其他行政單位」。"""
+    ranked = score_offices(text)
+    return ranked[0][0] if ranked else "其他行政單位"
+
+
+def _llm_pick_office(text: str, candidates: list[str]) -> str:
+    """讓模型從候選單位中挑一個；附上各單位職掌說明。失敗回空字串。"""
+    options = candidates or OFFICES
+    system = (
+        "你是校務詢問單分流器。依照各單位職掌，從清單中選出最適合承辦的一個單位。"
+        "只輸出單位名稱，完全照清單的寫法，不要加空白或說明。"
+    )
+    try:
+        response = requests.post(
+            f"{OLLAMA_URL}/api/chat",
+            json={"model": RELEVANCE_MODEL, "stream": False, "think": False,
+                  "messages": [{"role": "system", "content": system},
+                               {"role": "user",
+                                "content": f"單位職掌：\n{scope_lines(options)}\n\n問題：{text}\n\n請只輸出一個單位名稱。"}],
+                  "options": {"temperature": 0, "num_predict": 30},
+                  "keep_alive": RELEVANCE_KEEP_ALIVE},
+            timeout=60,
+        )
+        response.raise_for_status()
+        return normalize_office(response.json().get("message", {}).get("content", ""), options)
+    except (requests.RequestException, ValueError):
+        return ""
+
+
+def resolve_office(text: str) -> str:
+    """關鍵字有把握就用關鍵字，否則交給模型（候選為前幾名＋全部單位）。"""
+    ranked = score_offices(text)
+    top = ranked[0] if ranked else None
+    second = ranked[1][1] if len(ranked) > 1 else 0
+    if top and top[1] >= ROUTE_MIN_SCORE and top[1] - second >= ROUTE_MIN_MARGIN:
+        return top[0]
+    candidates = [office for office, _ in ranked[:3]]
+    if len(candidates) < 2:
+        candidates = [office for office in OFFICES if office != "其他行政單位"]
+    choice = _llm_pick_office(text, candidates)
+    return choice or (top[0] if top else "其他行政單位")
 
 def route_ticket(query: str, description: str = "") -> tuple[str, str]:
     """回傳 (處室, 系所)。系所為空字串代表不是系所層級的問題。"""
@@ -92,14 +101,14 @@ def route_ticket(query: str, description: str = "") -> tuple[str, str]:
     # 題目同時出現系所名稱與系所級業務字（系辦、導師、必修…）時，系所蓋過處室關鍵字
     if department and (keyword_choice == "其他行政單位" or has_priority_word(text)):
         return department_office(department) or "教務處註冊課務組", department
-    if keyword_choice != "其他行政單位":
-        return keyword_choice, ""
+    office = resolve_office(text)
+    return office, (department if office in ("教務處註冊課務組", "其他行政單位") else "")
     try:
         response = requests.post(
             f"{OLLAMA_URL}/api/chat",
             json={"model": OLLAMA_MODEL, "stream": False, "messages": [
                 {"role": "system", "content": "你是校務詢問單分流器。只能從指定處室名稱中選一個，僅輸出處室名稱，不要解釋。"},
-                {"role": "user", "content": f"處室：{'、'.join(OFFICES)}\n問題：{text}"}],
+                {"role": "user", "content": f"處室：{'、'.join(OFFICES)}\n{_OFFICE_HINTS}\n問題：{text}"}],
                 "options": {"temperature": 0, "num_predict": 30}, "keep_alive": "10m"}, timeout=30)
         response.raise_for_status()
         choice = response.json().get("message", {}).get("content", "").strip()
