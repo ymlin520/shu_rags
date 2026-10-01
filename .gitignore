@@ -8,6 +8,7 @@ data/analytics.db*
 data/qdrant-local/
 admin-token.txt
 office-tokens.json
+office-token-aliases.json
 office-login-codes.txt
 mail-settings.json
 office-emails.json

@@ -1,6 +1,6 @@
 <!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>前台外觀後台 · 校務 FAQ</title>
-<link rel="stylesheet" href="/static/design-admin.css?v=20260908103628">
+<link rel="stylesheet" href="/static/design-admin.css?v=20260929-catrename">
 </head><body>
 
 <div id="login" class="login-wrap">
@@ -66,8 +66,8 @@
 
       <div class="tab-panel" data-panel="lists" hidden>
         <h2>側欄分類</h2>
-        <p class="hint">「分類代碼」要對應知識庫裡的分類名稱，前台才能列出該分類的問題；「顯示名稱」是學生看到的文字。整份留空 = 使用系統自動產生的分類。</p>
-        <div class="row-actions"><button id="load-categories" class="ghost" type="button">帶入目前知識庫分類</button><button id="add-category" class="ghost" type="button">＋ 新增一列</button></div>
+        <p class="hint">前台左邊那排分類鈕全部列在這裡，直接改「前台顯示名稱」再按右上角「儲存並套用」就會生效。<br>「分類代碼」是知識庫（FAQ 題目）的分類名稱，系統自動帶入、不用修改；顯示名稱留空 = 直接用知識庫的分類名。按「刪除」只是取消這個分類的自訂名稱。<br>之後在 FAQ 後台新增了分類，按「重新帶入知識庫分類」就會補進來，已經改好的名稱會保留。</p>
+        <div class="row-actions"><button id="load-categories" class="ghost" type="button">重新帶入知識庫分類</button><button id="add-category" class="ghost" type="button">＋ 新增一列</button></div>
         <div id="category-rows" class="rows"></div>
 
         <h2>對話區快捷問題</h2>
@@ -112,5 +112,5 @@
   <p id="toast" class="toast" hidden></p>
 </div>
 
-<script src="/static/design-admin.js?v=20260908103628" defer></script>
+<script src="/static/design-admin.js?v=20260929-catrename" defer></script>
 </body></html>

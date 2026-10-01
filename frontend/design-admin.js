@@ -23,6 +23,7 @@
   var token = storedToken();
   var config = null, themeFields = [], textFields = [], assetFields = [], previewTimer = null;
   var overrideActive = false;
+  var kbCategories = [];
   var RAW_THEME = 'site-theme.css';
   var IMAGE_GROUP = '圖片';
   var BG_MODE_LABELS = { cover: '填滿整頁（邊緣可能被裁切）', contain: '完整顯示（周圍可能留白）', tile: '小圖重複平鋪' };
@@ -69,6 +70,8 @@
     textFields = data.text_fields;
     assetFields = data.asset_fields || [];
     overrideActive = !!data.css_override;
+    kbCategories = await loadKbCategories();
+    mergeCategoryRows();
     $('#login').hidden = true;
     $('#app').hidden = false;
     renderAll();
@@ -192,23 +195,81 @@
     if (note) note.hidden = !overrideActive;
   }
 
+  /* ---------------- 側欄分類 ----------------
+     前台側欄的分類是知識庫（faq.csv）產生的，這裡只負責改「顯示名稱」。
+     分類代碼＝知識庫分類全名；舊設定可能存成「選課相關常見問題」這種寫法，
+     用 catKey() 去掉編號與結尾的「常見問題」後再比對，就能對回正確的分類。 */
+  function catKey(name) {
+    return String(name || '').replace(/^[一二三四五六七八九十百]+、/, '').replace(/常見問題$/, '').trim();
+  }
+  function catDefaultLabel(name) {
+    return String(name || '').replace(/^[一二三四五六七八九十百]+、/, '').trim() || String(name || '');
+  }
+
+  async function loadKbCategories() {
+    try {
+      var r = await fetch('/api/categories?limit=1');
+      if (!r.ok) return [];
+      var d = await r.json();
+      return (d.categories || []).map(function (c) { return String(c.category); });
+    } catch (e) { return []; }
+  }
+
+  /* 知識庫現有分類一律列出來（沿用已存的顯示名稱），讓每個分類都能改名；
+     設定裡有、但知識庫已經沒有的分類就排在後面並標示出來。 */
+  function mergeCategoryRows() {
+    var saved = config.categories || [];
+    if (!kbCategories.length) {
+      config.categories = saved.map(function (r) {
+        return { query: r.query || r.label, label: r.label, kb: false };
+      });
+      return;
+    }
+    var byName = {}, byKey = {}, matched = [];
+    saved.forEach(function (r) {
+      var code = String(r.query || r.label || '');
+      if (!(code in byName)) byName[code] = r;
+      var key = catKey(code);
+      if (key && !(key in byKey)) byKey[key] = r;
+    });
+    var rows = kbCategories.map(function (name) {
+      var hit = byName[name] || byKey[catKey(name)];
+      if (hit) matched.push(hit);
+      return { query: name, label: (hit && hit.label) || catDefaultLabel(name), kb: true };
+    });
+    saved.forEach(function (r) {
+      if (matched.indexOf(r) < 0 && r.label) rows.push({ query: r.query || r.label, label: r.label, kb: false });
+    });
+    config.categories = rows;
+  }
+
   function rowHtml(kind, row) {
-    var a = kind === 'category' ? '分類代碼' : '顯示文字';
-    var b = kind === 'category' ? '顯示名稱' : '送出問題';
+    if (kind === 'category') {
+      /* 知識庫既有的分類：代碼唯讀，避免改壞了對不回知識庫；只有手動新增的列可以自己填代碼。 */
+      var known = row.kb !== false;
+      return '<div class="row' + (known ? '' : ' row-orphan') + '" data-kind="category">'
+        + '<input data-field="query" placeholder="分類代碼（知識庫名稱）" value="' + esc(row.query || '') + '"'
+        + (known ? ' readonly title="知識庫的分類名稱，不用也不要修改"' : ' title="知識庫目前沒有這個分類，改名不會有效果"')
+        + '>'
+        + '<input data-field="label" placeholder="前台顯示名稱" value="' + esc(row.label || '') + '">'
+        + '<button type="button" data-remove title="' + (known ? '移除自訂名稱，改回知識庫原本的分類名' : '刪除這一列') + '">刪除</button></div>';
+    }
     return '<div class="row" data-kind="' + kind + '">'
-      + '<input data-field="' + (kind === 'category' ? 'query' : 'label') + '" placeholder="' + a + '" value="'
-      + esc(kind === 'category' ? (row.query || '') : (row.label || '')) + '">'
-      + '<input data-field="' + (kind === 'category' ? 'label' : 'query') + '" placeholder="' + b + '" value="'
-      + esc(kind === 'category' ? (row.label || '') : (row.query || '')) + '">'
+      + '<input data-field="label" placeholder="顯示文字" value="' + esc(row.label || '') + '">'
+      + '<input data-field="query" placeholder="送出問題" value="' + esc(row.query || '') + '">'
       + '<button type="button" data-remove>刪除</button></div>';
   }
 
   function renderRows() {
     var cats = config.categories || [], sugs = config.suggestions || [];
+    var orphans = cats.filter(function (r) { return r.kb === false; }).length;
     $('#category-rows').innerHTML = (cats.length
       ? '<div class="row-head"><span>分類代碼（知識庫名稱）</span><span>前台顯示名稱</span><span></span></div>'
         + cats.map(function (r) { return rowHtml('category', r); }).join('')
-      : '<p class="rows-empty">目前未自訂，前台會自動使用知識庫產生的分類。</p>');
+        + '<p class="rows-note">共 ' + cats.length + ' 個分類'
+        + (orphans ? '；其中 ' + orphans + ' 列（淡紅色）知識庫已經沒有對應分類，可以直接刪除' : '')
+        + '。</p>'
+      : '<p class="rows-empty">讀不到知識庫分類，請按「重新帶入知識庫分類」。</p>');
     $('#suggestion-rows').innerHTML = (sugs.length
       ? '<div class="row-head"><span>按鈕顯示文字</span><span>實際送出的問題</span><span></span></div>'
         + sugs.map(function (r) { return rowHtml('suggestion', r); }).join('')
@@ -227,11 +288,17 @@
 
   /* ---------------- 收集表單 ---------------- */
   function collectRows(container, kind) {
-    return Array.prototype.map.call(container.querySelectorAll('.row'), function (row) {
+    var rows = Array.prototype.map.call(container.querySelectorAll('.row'), function (row) {
       var out = { label: '', query: '' };
       row.querySelectorAll('input').forEach(function (i) { out[i.dataset.field] = i.value.trim(); });
       return out;
-    }).filter(function (r) { return r.label || r.query; })
+    });
+    /* 分類列的顯示名稱清空 = 不自訂，前台會用知識庫原本的分類名，所以整列不送出。 */
+    if (kind === 'category') {
+      return rows.filter(function (r) { return r.query && r.label; })
+        .map(function (r) { return { label: r.label, query: r.query }; });
+    }
+    return rows.filter(function (r) { return r.label || r.query; })
       .map(function (r) { return { label: r.label || r.query, query: r.query || r.label }; });
   }
 
@@ -289,11 +356,24 @@
       }).join('');
     }
     var nav = doc.getElementById('category-list');
-    if (nav && payload.categories.length) {
-      nav.innerHTML = payload.categories.map(function (row, i) {
-        return '<button class="category" data-category="' + esc(row.query) + '"><span>'
-          + String(i + 1).padStart(2, '0') + '</span>' + esc(row.label) + '</button>';
-      }).join('');
+    if (nav) {
+      var labels = {};
+      payload.categories.forEach(function (row) {
+        if (!row.label) return;
+        labels[row.query] = row.label;
+        var key = catKey(row.query);
+        if (key && !(key in labels)) labels[key] = row.label;
+      });
+      var names = kbCategories.length
+        ? kbCategories
+        : payload.categories.map(function (row) { return row.query; });
+      if (names.length) {
+        nav.innerHTML = names.map(function (name, i) {
+          var label = labels[name] || labels[catKey(name)] || catDefaultLabel(name);
+          return '<button class="category" data-category="' + esc(name) + '"><span>'
+            + String(i + 1).padStart(2, '0') + '</span>' + esc(label) + '</button>';
+        }).join('');
+      }
     }
     applyRawPreview();
   }
@@ -363,18 +443,14 @@
     box.insertAdjacentHTML('beforeend', rowHtml('suggestion', {}));
   });
   $('#load-categories').addEventListener('click', async function () {
-    try {
-      var r = await fetch('/api/categories?limit=20');
-      var d = await r.json();
-      var rows = (d.categories || []).map(function (c) {
-        return { query: c.category, label: String(c.category).replace(/^[一二三四五六七八九十百]+、/, '') };
-      });
-      if (!rows.length) return toast('知識庫目前沒有分類', true);
-      config.categories = rows;
-      renderRows();
-      schedulePreview();
-      toast('已帶入 ' + rows.length + ' 個分類');
-    } catch (err) { toast('讀取分類失敗', true); }
+    var latest = await loadKbCategories();
+    if (!latest.length) return toast('讀不到知識庫分類', true);
+    kbCategories = latest;
+    config.categories = collectRows($('#category-rows'), 'category');
+    mergeCategoryRows();
+    renderRows();
+    schedulePreview();
+    toast('已帶入 ' + latest.length + ' 個分類，改過的名稱都保留');
   });
 
   $('#preview-reload').addEventListener('click', function () { $('#preview').contentWindow.location.reload(); });

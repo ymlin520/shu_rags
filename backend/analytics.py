@@ -129,7 +129,7 @@ def delete_ticket(ticket_no: str) -> bool:
         return True
 
 
-def list_tickets(status: str = "", office: str = "", department: str = "",
+def list_tickets(status: str = "", office: str | list[str] = "", department: str = "",
                  settled: str = "") -> list[dict]:
     # 一併帶出「最初 AI 分派的處室」與「人工轉單次數」，後台清單才能顯示轉單來源。
     # 處室更名寫入的 transfer 事件 actor 是「系統」，不算人工轉單。
@@ -141,7 +141,11 @@ def list_tickets(status: str = "", office: str = "", department: str = "",
                    " FROM tickets t WHERE 1=1", [])
     if status:
         sql += " AND status=?"; params.append(status)
-    if office:
+    if isinstance(office, (list, tuple, set)):
+        offices = [str(x) for x in office if str(x)]
+        if offices:  # 教務處總窗口一次看多個窗口
+            sql += " AND office IN (%s)" % ",".join("?" * len(offices)); params.extend(offices)
+    elif office:
         sql += " AND office=?"; params.append(office)
     if department:
         sql += " AND department=?"; params.append(department)

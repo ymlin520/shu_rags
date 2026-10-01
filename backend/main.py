@@ -22,6 +22,7 @@ from .department_service import DEFAULTS as DEPARTMENT_DEFAULTS
 from .knowledge_service import faq_categories, sync_resolved_ticket
 from . import faq_service
 from .analytics import add_ticket_reply, create_ticket, delete_ticket, department_stats, set_ticket_settled, settle_stats, list_tickets, record_ack_email, log_feedback, log_query, public_ticket, rate_ticket, record_knowledge_sync, record_student_email, record_ticket_email, stats, ticket_detail, update_ticket
+from .routing_rules import DEPARTMENT_FALLBACK_OFFICE
 from .mail_service import (department_recipient, mail_status, save_office_emails, save_password, save_settings,
                            send_ticket_ack_email,
                            send_student_resolution_email, send_test_email, send_ticket_email)
@@ -229,16 +230,38 @@ def require_admin(token: str) -> None:
         raise HTTPException(status_code=401, detail="管理密碼不正確")
 
 
-def require_office_scope(token: str) -> tuple[str, str]:
-    """回傳 (處室, 系所)。系所登入碼只看得到分派給該系所的詢問單。"""
+def _token_aliases() -> dict:
+    """舊登入碼對照表：處室改組前寄出的通知信仍附著舊碼，讓它們繼續能登入。
+
+    格式 {舊碼: {"primary": 主要處室, "offices": [看得到的處室…]}}，檔案不存在就代表沒有舊碼。
+    """
+    path = PROJECT_ROOT / "office-token-aliases.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def require_office_scope(token: str) -> tuple[str, str, list[str]]:
+    """回傳 (主要處室, 系所, 看得到的處室清單)。
+
+    系所登入碼只看得到分派給該系所的詢問單（不分承辦窗口）；
+    舊的處室登入碼（例如改組前的教務處註冊課務組）沿用為總窗口，看得到改組後的各窗口。
+    """
     department = department_by_token(token)
     if department:
-        return department_office(department) or "教務處註冊課務組", department
+        return department_office(department) or DEPARTMENT_FALLBACK_OFFICE, department, []
     path = PROJECT_ROOT / "office-tokens.json"
     if not path.exists(): raise HTTPException(status_code=503, detail="尚未設定處室帳號")
+    # 別名要先比對：教務處總窗口的碼同時也在 office-tokens.json 裡，先走這裡才拿得到跨窗口視野
+    alias = _token_aliases().get(token or "")
+    if isinstance(alias, dict) and alias.get("primary"):
+        offices = [x for x in alias.get("offices") or [] if x] or [alias["primary"]]
+        return str(alias["primary"]), "", offices
     tokens = json.loads(path.read_text(encoding="utf-8-sig"))
     for office, saved in tokens.items():
-        if token and token == saved: return office, ""
+        if token and token == saved: return office, "", [office]
     raise HTTPException(status_code=401, detail="登入碼不正確")
 
 
@@ -486,17 +509,29 @@ def tickets_get(status: str = "", office: str = "", settled: str = "", x_admin_t
     return {"tickets": list_tickets(status, office, settled=settled)}
 
 
+def scoped_tickets(offices: list[str], department: str, status: str = "", settled: str = "") -> list[dict]:
+    """系所登入看「分派給該系所」的全部詢問單，不綁承辦窗口。
+
+    教務處拆成九個窗口後，同一個系所的問題可能落在不同窗口（選課題→課程與選課、
+    學籍題→學籍與註冊），再用處室一起篩就會查不到自己的單。
+    處室登入維持原本的行為：看該處室的全部詢問單。
+    """
+    if department:
+        return list_tickets(status, "", department, settled=settled)
+    return list_tickets(status, offices, "", settled=settled)
+
+
 @app.get("/api/office/tickets")
 def office_tickets(status: str = "", settled: str = "", x_office_token: str = Header(default="")):
     """settled=0 代表不含已銷案（處室清單預設值），空字串代表全部。"""
-    office, department = require_office_scope(x_office_token)
+    office, department, offices = require_office_scope(x_office_token)
     return {"office": office, "department": department, "unit": department or office,
-            "tickets": list_tickets(status, office, department, settled=settled)}
+            "tickets": scoped_tickets(offices, department, status, settled)}
 
 
 @app.get("/api/office/mail")
 def office_mail_get(x_office_token: str = Header(default="")):
-    office, department = require_office_scope(x_office_token)
+    office, department, offices = require_office_scope(x_office_token)
     info = mail_status()
     email = (info["departments"].get(department, {}).get("email") if department
              else info["offices"].get(office)) or info["default_email"]
@@ -506,7 +541,7 @@ def office_mail_get(x_office_token: str = Header(default="")):
 
 @app.put("/api/office/mail")
 def office_mail_save(request: OfficeMailRequest, x_office_token: str = Header(default="")):
-    office, department = require_office_scope(x_office_token)
+    office, department, offices = require_office_scope(x_office_token)
     email = request.email.strip().lower()
     if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
         raise HTTPException(status_code=422, detail="請輸入有效的電子郵件地址")
@@ -521,8 +556,8 @@ def office_mail_save(request: OfficeMailRequest, x_office_token: str = Header(de
 
 @app.get("/api/office/tickets/{ticket_no}")
 def office_ticket_get(ticket_no: str, x_office_token: str = Header(default="")):
-    office, department = require_office_scope(x_office_token)
-    rows = [x for x in list_tickets(office=office, department=department) if x["ticket_no"] == ticket_no]
+    office, department, offices = require_office_scope(x_office_token)
+    rows = [x for x in scoped_tickets(offices, department) if x["ticket_no"] == ticket_no]
     if not rows: raise HTTPException(status_code=404, detail="找不到分派給本處室的詢問單")
     return ticket_detail(ticket_no)
 
@@ -530,8 +565,8 @@ def office_ticket_get(ticket_no: str, x_office_token: str = Header(default="")):
 @app.patch("/api/office/tickets/{ticket_no}")
 def office_ticket_update(ticket_no: str, request: TicketUpdateRequest, background_tasks: BackgroundTasks,
                          x_office_token: str = Header(default="")):
-    office, department = require_office_scope(x_office_token)
-    rows = [x for x in list_tickets(office=office, department=department) if x["ticket_no"] == ticket_no]
+    office, department, offices = require_office_scope(x_office_token)
+    rows = [x for x in scoped_tickets(offices, department) if x["ticket_no"] == ticket_no]
     if not rows: raise HTTPException(status_code=404, detail="找不到分派給本處室的詢問單")
     previous_office = rows[0]["office"]
     data = request.model_dump()
@@ -573,8 +608,8 @@ def ticket_settle_admin(ticket_no: str, request: TicketSettleRequest, x_admin_to
 
 @app.post("/api/office/tickets/{ticket_no}/settle")
 def ticket_settle_office(ticket_no: str, request: TicketSettleRequest, x_office_token: str = Header(default="")):
-    office, department = require_office_scope(x_office_token)
-    rows = [x for x in list_tickets(office=office, department=department) if x["ticket_no"] == ticket_no]
+    office, department, offices = require_office_scope(x_office_token)
+    rows = [x for x in scoped_tickets(offices, department) if x["ticket_no"] == ticket_no]
     if not rows:
         raise HTTPException(status_code=404, detail="找不到分派給本單位的詢問單")
     ticket = set_ticket_settled(ticket_no, request.settled, request.actor or (department or office), request.note)

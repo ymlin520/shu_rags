@@ -70,6 +70,9 @@ body{margin:0;min-height:100vh;background:linear-gradient(135deg,#eeeae4,#ddd8d0
 .row-head{display:grid;grid-template-columns:1fr 1.2fr auto;gap:8px;font-size:11.5px;color:var(--muted);font-weight:700;padding:0 2px}
 .row-actions{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
 .rows-empty{color:var(--muted);font-size:12.5px;margin:4px 0 10px}
+.rows-note{color:var(--muted);font-size:12px;margin:6px 2px 0}
+.row input[readonly]{background:#f2eee8;color:var(--muted);cursor:default}
+.row-orphan input[data-field="query"]{border-color:#d6a79d;background:#fdf2ef;color:#ba3828}
 
 #custom-css{width:100%;min-height:calc(100vh - 320px);border:1.5px solid #ccc4ba;border-radius:11px;padding:14px;font:13px/1.7 ui-monospace,Consolas,"Courier New",monospace;background:#fdfcfa;resize:vertical}
 #custom-css:focus{outline:0;border-color:var(--accent)}
