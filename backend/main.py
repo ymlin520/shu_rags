@@ -12,7 +12,7 @@ from fastapi import BackgroundTasks, Body, FastAPI, File, Form, Header, HTTPExce
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from .config import COLLECTION_NAME, PROJECT_ROOT
+from .config import COLLECTION_NAME, DIRECT_ANSWER_SCORE, PROJECT_ROOT
 from .embedding import embed_text
 from .llm_service import (site_text, answer_from_faq, filter_relevant, ollama_status, route_ticket,
                           warm_up_relevance_model)
@@ -325,6 +325,15 @@ def ask(request: SearchRequest):
         log_query(request.query, results)
         if not results:
             return {"query": request.query, "answer": site_text("ai_no_info"), "results": [], "generated": False, "model": "", "notice": "未找到相關 FAQ", "followups": [], "steps": []}
+        top = results[0]
+        if float(top.get("score") or 0) >= DIRECT_ANSWER_SCORE and str(top.get("answer") or "").strip():
+            # 幾乎完全命中：直接給 FAQ 原文，前台會標示「FAQ 原文」
+            logger.info("命中 FAQ 原文 query=%r score=%.3f", request.query, float(top.get("score") or 0))
+            return {"query": request.query, "answer": str(top["answer"]).strip(), "results": results[:3],
+                    "generated": False, "model": "", "notice": "",
+                    "followups": [q for q in (str(x.get("question", "")).strip() for x in results[1:])
+                                  if q and q != request.query][:3],
+                    "steps": []}
         try:
             answer = answer_from_faq(request.query, results[:5])
             generated, notice = True, ""

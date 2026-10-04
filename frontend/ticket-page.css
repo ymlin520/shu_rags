@@ -13,3 +13,7 @@
 #rate-submit:disabled{background:#d8d2ca;border-color:#d8d2ca;cursor:not-allowed}
 #rate-status{margin-top:9px;color:#1c7c48}
 @media(max-width:800px){.rate-bottom{flex-direction:column;align-items:flex-start}}
+
+/* 處理紀錄裡自動偵測到的網址 */
+.event a{color:#c2410c;text-decoration:underline;word-break:break-all}
+.event a:hover{text-decoration:none}

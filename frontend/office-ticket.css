@@ -15,3 +15,11 @@
 /* 回覆區的勾選框：與文字同一行 */
 .reply label.faq-opt{display:flex;align-items:flex-start;gap:8px;margin:12px 0;font-size:13px;color:#555;line-height:1.6;cursor:pointer}
 .reply label.faq-opt input[type=checkbox]{flex:none;width:16px;height:16px;margin:2px 0 0;accent-color:#e6532d}
+
+/* 頁首的返回鈕：單子已解決、頁面很長時也看得到回清單的入口 */
+header{flex-wrap:wrap;gap:12px}
+.head-right{display:flex;align-items:center;gap:16px}
+.head-right a.back{color:#292724;border:1px solid #292724;border-radius:9px;padding:10px 14px;
+  text-decoration:none;white-space:nowrap;font-size:14px}
+.head-right a.back:hover{border-color:var(--accent);color:var(--accent)}
+@media(max-width:800px){.head-right{width:100%;justify-content:space-between}}

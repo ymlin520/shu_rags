@@ -50,3 +50,7 @@
 .faq-picker-more, .faq-picker-hint { margin: 12px 0 0; color: var(--muted); font-size: 12px; }
 .faq-picker-hint { padding-top: 10px; border-top: 1px dashed #ddd5cb; }
 @media(max-width:900px){.faq-picker{padding:15px}.faq-picker-list{grid-template-columns:1fr}}
+
+/* 回答內文裡自動偵測到的網址 */
+.answer-text a,.message a{color:var(--accent,#e6532d);text-decoration:underline;word-break:break-all}
+.answer-text a:hover,.message a:hover{text-decoration:none}
