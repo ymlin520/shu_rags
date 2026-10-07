@@ -24,6 +24,8 @@ def _record(ticket: dict) -> dict[str, str]:
         "id": f"TICKET-{ticket['ticket_no']}", "category": category, "question": question,
         "answer": answer, "url": "", "keywords": f"{category} {office} 詢問單回覆 已解決",
         "office": office, "email": "",
+        # 自動整理進知識庫的詢問單沒有人工填寫人，帶入回覆的承辦人／單位，後台仍可改
+        "owner": str(ticket.get("assignee") or office).strip(),
     }
 
 

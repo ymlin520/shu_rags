@@ -118,6 +118,7 @@ class FaqUpsertRequest(BaseModel):
     keywords: str = Field(default="", max_length=500)
     office: str = Field(default="", max_length=100)
     email: str = Field(default="", max_length=200)
+    owner: str = Field(min_length=1, max_length=60)   # 負責填寫人必填
 
 
 class FaqSourceRequest(BaseModel):

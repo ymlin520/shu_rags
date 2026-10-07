@@ -1,4 +1,4 @@
-<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>常見問題管理・校務問答</title><link rel="stylesheet" href="/static/admin.css?v=20260911b"><link rel="stylesheet" href="/static/faq-admin.css?v=20260917-recent"></head><body><main>
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>常見問題管理・校務問答</title><link rel="stylesheet" href="/static/admin.css?v=20260911b"><link rel="stylesheet" href="/static/faq-admin.css?v=20261005-owner"></head><body><main>
 
 <header><div><small>校務問答</small><h1>常見問題管理</h1><p>匯入試算表、逐筆編輯 FAQ；存檔後前台分類與 AI 回答會立即使用新資料。</p></div><div class="header-actions"><a href="/admin">詢問單後台</a><a href="/" target="_blank" rel="noopener">前台問答 ↗</a><button id="export">匯出 CSV</button><button id="logout" hidden>登出</button></div></header>
 
@@ -26,7 +26,7 @@
     <div class="modes"><label><input type="radio" name="mode" value="merge" checked>合併更新<small>同編號或同一題會更新原本那筆，並記錄更新時間與更新內容；未出現在這份資料的舊題目保留</small></label><label><input type="radio" name="mode" value="replace">完全取代<small>清空知識庫，只留下這份資料</small></label></div>
   </div>
   <p class="hint" id="mapping"></p>
-  <div class="table-wrap preview-wrap"><table><thead><tr><th class="pick"><input type="checkbox" id="pick-all" checked></th><th>列</th><th>編號</th><th>分類</th><th>問題</th><th>建議答案</th><th>主責單位</th><th>處理方式</th></tr></thead><tbody id="preview-rows"></tbody></table></div>
+  <div class="table-wrap preview-wrap"><table><thead><tr><th class="pick"><input type="checkbox" id="pick-all" checked></th><th>列</th><th>編號</th><th>分類</th><th>問題</th><th>建議答案</th><th>主責單位</th><th>負責填寫人</th><th>處理方式</th></tr></thead><tbody id="preview-rows"></tbody></table></div>
   <div class="import-actions"><button id="commit" class="save" type="button">確認匯入</button><button id="cancel" type="button">取消</button><span id="commit-msg"></span></div>
 </div>
 
@@ -36,10 +36,16 @@
 </div>
 </section>
 
+<section class="panel" id="office-board">
+<div class="section-title"><h2>依主責單位瀏覽</h2><small>點一個單位就只看該單位的常見問題，在裡面新增時會自動帶入主責單位</small></div>
+<div id="office-groups"></div>
+</section>
+
 <section class="panel">
-<div class="section-title"><h2>所有常見問題</h2><span id="count"></span></div>
+<div class="section-title"><h2 id="list-title">所有常見問題</h2><span id="count"></span></div>
+<div id="scope-bar" class="scope-bar" hidden><span>目前檢視：<b id="scope-name"></b></span><button id="scope-clear" type="button">← 回到全部單位</button></div>
 <div class="list-toolbar"><input id="search" type="search" placeholder="搜尋編號、問題、答案或單位"><select id="category-filter"><option value="">所有分類</option></select><select id="office-filter"><option value="">所有主責單位</option></select><select id="sort" title="排序方式"><option value="recent">排序：最近更新在前</option><option value="oldest">排序：最早更新在前</option><option value="id">排序：編號由小到大</option><option value="idDesc">排序：編號由大到小</option><option value="category">排序：依分類</option><option value="office">排序：依主責單位</option></select><button id="add" class="save" type="button">＋ 新增一筆</button><button id="reindex" type="button">重建向量</button></div>
-<div class="table-wrap"><table><thead><tr><th>編號</th><th>分類</th><th>問題／建議答案</th><th>主責單位</th><th>更新時間</th><th>更新內容</th><th>來源</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th>編號</th><th>分類</th><th>問題／建議答案</th><th>主責單位</th><th>負責填寫人</th><th>更新時間</th><th>更新內容</th><th>來源</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>
 <div class="pager"><button id="prev" type="button">← 上一頁</button><span id="page-info"></span><button id="next" type="button">下一頁 →</button></div>
 </section>
 
@@ -47,7 +53,7 @@
 
 <dialog id="editor"><form id="edit-form">
 <div class="detail-head"><div><small id="edit-mode"></small><h2 id="edit-title">編輯常見問題</h2></div><button type="button" id="edit-close">×</button></div>
-<div class="edit-grid"><label>問題編號<input id="f-id" placeholder="留空自動編號"></label><label>分類<input id="f-category" list="category-list"></label><label>主責單位<input id="f-office" list="office-list"></label><label>信箱<input id="f-email" type="email" placeholder="xxx@mail.shu.edu.tw"></label></div>
+<div class="edit-grid"><label>問題編號<input id="f-id" placeholder="留空自動編號"></label><label>分類<input id="f-category" list="category-list"></label><label>主責單位<input id="f-office" list="office-list"></label><label>信箱<input id="f-email" type="email" placeholder="xxx@mail.shu.edu.tw"></label><label><span class="lab">負責填寫人<span class="req">必填</span></span><input id="f-owner" list="owner-list" placeholder="這題由誰維護，例如：王小明" maxlength="60" required></label></div>
 <label>問題<input id="f-question" required maxlength="500"></label>
 <label>建議答案<textarea id="f-answer" rows="8" required></textarea></label>
 <label>依據／來源連結<input id="f-url" placeholder="https://"></label>
@@ -56,5 +62,5 @@
 <div class="edit-actions"><button type="button" id="delete" class="danger">刪除這筆</button><button class="save" type="submit">儲存並更新向量</button></div>
 </form></dialog>
 
-<datalist id="category-list"></datalist><datalist id="office-list"></datalist>
-<script src="/static/faq-admin.js?v=20260917-sort"></script></body></html>
+<datalist id="category-list"></datalist><datalist id="office-list"></datalist><datalist id="owner-list"></datalist>
+<script src="/static/faq-admin.js?v=20261005-owner"></script></body></html>

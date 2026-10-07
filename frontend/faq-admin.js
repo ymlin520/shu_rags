@@ -1,7 +1,7 @@
 const $ = s => document.querySelector(s);
 const ADMIN_TOKEN_KEY = 'school-faq-admin-token';
 const PAGE_SIZE = 50;
-const FIELDS = ['id', 'category', 'question', 'answer', 'url', 'keywords', 'office', 'email'];
+const FIELDS = ['id', 'category', 'question', 'answer', 'url', 'keywords', 'office', 'email', 'owner'];
 const SEARCH_FIELDS = [...FIELDS, 'updated_at', 'update_note'];
 const byId = (a, b) => String(a.id).localeCompare(String(b.id), 'en', { numeric: true });
 const text = v => String(v || '');
@@ -30,7 +30,7 @@ async function load() {
   if (!response.ok) throw new Error(response.status === 401 ? '管理密碼不正確' : await detail(response));
   const data = await response.json();
   faqs = data.faqs; summary = data.summary;
-  renderSummary(); renderFilters(); renderList();
+  renderSummary(); renderFilters(); renderOfficeBoard(); renderList();
 }
 
 function renderSummary() {
@@ -51,18 +51,77 @@ function renderFilters() {
   const categories = summary.categories.map(x => x.name), offices = summary.offices.map(x => x.name);
   fillOptions($('#category-filter'), categories, true);
   fillOptions($('#office-filter'), offices, true);
+  if (faqs.some(x => !officeOf(x))) $('#office-filter').insertAdjacentHTML('beforeend', `<option value="${NO_OFFICE}">未填主責單位</option>`);
   $('#category-list').innerHTML = categories.map(v => `<option value="${esc(v)}">`).join('');
   $('#office-list').innerHTML = offices.map(v => `<option value="${esc(v)}">`).join('');
+  const owners = [...new Set(faqs.map(x => (x.owner || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+  $('#owner-list').innerHTML = owners.map(v => `<option value="${esc(v)}">`).join('');
 }
 
 /* ----------------------------------------------------------------- FAQ 清單 */
+
+const NO_OFFICE = '__none__';   // 「未填主責單位」的篩選值
+const officeOf = x => x.office || '';
+const matchOffice = (x, office) => !office || (office === NO_OFFICE ? !officeOf(x) : officeOf(x) === office);
 
 function filtered() {
   const keyword = $('#search').value.trim().toLowerCase();
   const category = $('#category-filter').value, office = $('#office-filter').value;
   return faqs.filter(x =>
-    (!category || (x.category || '未分類') === category) && (!office || x.office === office) &&
+    (!category || (x.category || '未分類') === category) && matchOffice(x, office) &&
     (!keyword || SEARCH_FIELDS.some(f => String(x[f] || '').toLowerCase().includes(keyword))));
+}
+
+/* --------------------------------------------------- 依主責單位瀏覽（處室選單） */
+
+// 把單位歸到上層處室：先去掉「-」後面的窗口名，再抓到「處／室／中心／學院」為止
+// 教務處-課程與選課 → 教務處；學務處生輔組 → 學務處；人事室 → 人事室；舍我紀念館 → 舍我紀念館
+function groupOf(name) {
+  const head = String(name).split('-')[0];
+  const m = head.match(/^(.*?(?:處|室|中心|學院|電台))/);
+  return m ? m[1] : head;
+}
+
+function renderOfficeBoard() {
+  const counts = new Map();
+  faqs.forEach(x => { const k = officeOf(x) || NO_OFFICE; counts.set(k, (counts.get(k) || 0) + 1) });
+  const names = summary.offices.map(x => x.name).filter(n => n);
+  for (const k of counts.keys()) if (k !== NO_OFFICE && !names.includes(k)) names.push(k);
+  names.sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+
+  const groups = new Map();
+  names.forEach(n => { const g = groupOf(n); if (!groups.has(g)) groups.set(g, []); groups.get(g).push(n) });
+  // 只有一個窗口的處室不另外開一區，統一收到最後的「其他單位」，免得標題比內容還多
+  const solo = [];
+  for (const [g, list] of [...groups]) if (list.length < 2) { solo.push(...list); groups.delete(g) }
+  if (solo.length) groups.set('其他單位', solo.sort((a, b) => a.localeCompare(b, 'zh-Hant')));
+
+  const current = $('#office-filter').value;
+  const chip = (value, label, total) =>
+    `<button type="button" class="office-chip${current === value ? ' active' : ''}" data-office="${esc(value)}">` +
+    `<span>${esc(label)}</span><em>${total}</em></button>`;
+
+  let html = `<div class="office-grid office-top">${chip('', '全部單位', faqs.length)}` +
+    (counts.get(NO_OFFICE) ? chip(NO_OFFICE, '未填主責單位', counts.get(NO_OFFICE)) : '') + '</div>';
+  for (const [group, list] of groups) {
+    const total = list.reduce((sum, n) => sum + (counts.get(n) || 0), 0);
+    const label = n => (group === '其他單位' || n === group) ? n : n.replace(/^.*?-/, '') || n;
+    html += `<div class="office-group"><h3>${esc(group)}<em>共 ${total} 題</em></h3><div class="office-grid">` +
+      list.map(n => chip(n, label(n), counts.get(n) || 0)).join('') + '</div></div>';
+  }
+  $('#office-groups').innerHTML = html;
+
+  const name = current === NO_OFFICE ? '未填主責單位' : current;
+  $('#scope-bar').hidden = !current;
+  $('#scope-name').textContent = name || '';
+  $('#list-title').textContent = current ? `${name} 的常見問題` : '所有常見問題';
+  $('#add').textContent = current && current !== NO_OFFICE ? `＋ 在${name}新增一筆` : '＋ 新增一筆';
+}
+
+function pickOffice(value) {
+  $('#office-filter').value = value;
+  page = 1;
+  renderOfficeBoard(); renderList();
 }
 
 function renderList() {
@@ -72,11 +131,11 @@ function renderList() {
   const slice = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   $('#count').textContent = rows.length === faqs.length ? `共 ${faqs.length} 筆` : `符合 ${rows.length} 筆／共 ${faqs.length} 筆`;
   $('#rows').innerHTML = slice.length ? slice.map(x => `<tr><td class="id">${esc(x.id)}</td><td>${esc(x.category) || '<span class="muted">未分類</span>'}</td>
-<td><span class="q">${esc(x.question)}</span><small class="a">${esc(cut(x.answer, 90))}</small></td><td>${esc(x.office) || '—'}</td>
+<td><span class="q">${esc(x.question)}</span><small class="a">${esc(cut(x.answer, 90))}</small></td><td>${esc(x.office) || '—'}</td><td>${esc(x.owner) || '—'}</td>
 <td class="when">${esc(x.updated_at) || '—'}</td><td class="note">${esc(x.update_note) || '—'}</td>
 <td>${x.url ? `<a href="${esc(x.url)}" target="_blank" rel="noopener">開啟 ↗</a>` : '—'}</td>
 <td><button class="edit" data-edit="${esc(x.id)}" type="button">編輯 →</button></td></tr>`).join('')
-    : '<tr><td colspan="8">沒有符合條件的常見問題</td></tr>';
+    : '<tr><td colspan="9">沒有符合條件的常見問題</td></tr>';
   $('#page-info').textContent = `第 ${page} / ${pages} 頁`;
   $('#prev').disabled = page <= 1; $('#next').disabled = page >= pages;
 }
@@ -122,7 +181,7 @@ function renderPreview() {
   $('#preview-rows').innerHTML = rows.map((x, index) => `<tr class="${x.action}${x.similar || x.warn ? ' flagged' : ''}">
 <td class="pick">${x.action === 'skip' ? '' : `<input type="checkbox" data-row="${index}" ${x.warn ? '' : 'checked'}>`}</td><td>${x.row}</td>
 <td class="id">${esc(x.id)}</td><td>${esc(cut(x.category, 14))}</td><td><span class="cell">${esc(x.question)}</span></td>
-<td><span class="cell">${esc(cut(x.answer, 120))}</span></td><td>${esc(x.office)}</td>
+<td><span class="cell">${esc(cut(x.answer, 120))}</span></td><td>${esc(x.office)}</td><td>${esc(x.owner || '')}</td>
 <td><b class="act ${x.action}">${x.action === 'create' ? '新增' : x.action === 'update' ? '更新' : '略過'}</b><small class="a">${esc(x.note)}</small>${x.similar ? `<small class="flag similar">⚠ ${esc(x.similar)}</small>` : ''}${x.related ? `<small class="flag related">相關舊題：${esc(x.related)}</small>` : ''}${x.warn ? `<small class="flag warn">⚠ ${esc(x.warn)}（預設不勾選）</small>` : ''}</td></tr>`).join('');
   $('#pick-all').checked = !rows.some(x => x.warn);
   msg('#commit-msg', '', true);
@@ -187,6 +246,9 @@ function openEditor(faq) {
   $('#edit-mode').textContent = faq ? `問題編號 ${faq.id}` : '新增';
   $('#edit-title').textContent = faq ? '編輯常見問題' : '新增常見問題';
   FIELDS.forEach(field => { $(`#f-${field}`).value = value(field) });
+  // 新增時若正在看某個單位，先把主責單位填好，省得每次重打
+  const scope = $('#office-filter').value;
+  if (!faq && scope && scope !== NO_OFFICE) $('#f-office').value = scope;
   $('#delete').hidden = !faq;
   msg('#edit-msg', '', true);
   $('#editor').showModal();
@@ -197,6 +259,7 @@ async function saveEditor(event) {
   event.preventDefault();
   const payload = Object.fromEntries(FIELDS.map(field => [field, $(`#f-${field}`).value.trim()]));
   if (!payload.question || !payload.answer) return msg('#edit-msg', '問題與建議答案不可空白。', false);
+  if (!payload.owner) { $('#f-owner').focus(); return msg('#edit-msg', '請填寫負責填寫人的姓名。', false) }
   const button = $('#edit-form .save'); button.disabled = true;
   msg('#edit-msg', '儲存中，正在更新向量…', true);
   try {
@@ -259,7 +322,9 @@ $('#export').onclick = () => download('/api/admin/faqs.csv', 'faq.csv');
 
 $('#search').oninput = () => { page = 1; renderList() };
 $('#category-filter').onchange = () => { page = 1; renderList() };
-$('#office-filter').onchange = () => { page = 1; renderList() };
+$('#office-filter').onchange = () => { page = 1; renderOfficeBoard(); renderList() };
+$('#office-groups').onclick = event => { const b = event.target.closest('[data-office]'); if (b) pickOffice(b.dataset.office) };
+$('#scope-clear').onclick = () => pickOffice('');
 $('#prev').onclick = () => { page -= 1; renderList() };
 $('#next').onclick = () => { page += 1; renderList() };
 $('#add').onclick = () => openEditor(null);

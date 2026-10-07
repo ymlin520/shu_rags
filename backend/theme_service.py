@@ -63,6 +63,9 @@ DEFAULT_TEXT = {
     "composer_placeholder": "請輸入您的問題…",
     "submit_text": "送出 ↗",
     "disclaimer": "回答由地端 AI 依 FAQ 整理；重要規定仍請以校方最新公告為準。",
+    "faq_picker_title": "請選擇想問的問題",
+    "faq_picker_more": "此分類共 {總數} 題，以下列出 {題數} 題常見問題。",
+    "faq_picker_hint": "沒有想問的？直接在下方輸入你的問題即可。",
     "answer_ai_label": "AI 整理",
     "answer_faq_label": "FAQ 原文",
     "ticket_badge": "AI 自動分派",
@@ -163,6 +166,10 @@ THEME_FIELDS = {
     "message_text":       ("color", "#292724", "AI 對話框文字色", "對話"),
     "user_msg_bg":        ("color", "#f7ddd1", "使用者對話框底色", "對話"),
     "disclaimer_color":   ("color", "#888078", "底部免責文字色", "對話"),
+    # 版面開關：關掉就用 CSS 藏起來，HTML 與 JS 都不動，隨時可以再打開
+    "show_new_chat":      ("select", "顯示", "左上角「＋ 新對話」按鈕", "版面開關", ["顯示", "隱藏"]),
+    "show_composer":      ("select", "顯示", "下方問題輸入框（學生自行打字發問）", "版面開關", ["顯示", "隱藏"]),
+    "show_history":       ("select", "顯示", "左側「之前的對話」紀錄", "版面開關", ["顯示", "隱藏"]),
 }
 
 DEFAULT_THEME = {key: spec[1] for key, spec in THEME_FIELDS.items()}
@@ -366,6 +373,20 @@ def _avatar_rules(t: dict, assets: dict) -> str:
     return "\n".join(rules)
 
 
+def _visibility_rules(t: dict) -> str:
+    """後台把某個區塊設成「隱藏」時產生的 CSS；手機版的浮動新對話鈕也要一起關掉。"""
+    rules = []
+    if t.get("show_new_chat") == "隱藏":
+        rules.append(".new-chat,.mobile-new-chat{display:none!important;}")
+    if t.get("show_history") == "隱藏":
+        rules.append(".history-panel{display:none!important;}")
+    if t.get("show_composer") == "隱藏":
+        # 只藏輸入框與狀態列，底部免責聲明保留
+        rules.append(".composer,#status{display:none!important;}")
+        rules.append(".composer-wrap{padding-top:14px;}")
+    return '\n'.join(rules)
+
+
 def build_css(cfg: dict = None) -> str:
     cfg = cfg or load_config()
     t = dict(DEFAULT_THEME)
@@ -416,6 +437,7 @@ def build_css(cfg: dict = None) -> str:
         ".ticket-dialog .primary{background:%s;color:%s;}" % (t["btn_bg"], t["btn_text"]),
         _logo_rule(t, assets),
         _avatar_rules(t, assets),
+        _visibility_rules(t),
         "/* ==== 自訂 CSS ==== */",
         custom,
         "",
@@ -427,12 +449,22 @@ def css_override_exists() -> bool:
 
 
 def render_site_css() -> str:
-    """前台實際拿到的 site-theme.css：有覆寫檔就用覆寫檔，否則即時產生。"""
+    """前台實際拿到的 site-theme.css：有覆寫檔就用覆寫檔，否則即時產生。
+
+    「版面開關」是功能設定不是配色，所以即使用了手寫覆寫檔也要生效，接在最後面。
+    """
     if CSS_OVERRIDE_PATH.exists():
         try:
-            return CSS_OVERRIDE_PATH.read_text(encoding="utf-8-sig")
+            base = CSS_OVERRIDE_PATH.read_text(encoding="utf-8-sig")
         except Exception:
-            pass
+            return build_css()
+        theme = dict(DEFAULT_THEME)
+        theme.update(load_config().get("theme") or {})
+        extra = _visibility_rules(theme)
+        if not extra:
+            return base
+        header = '\n\n/* ==== 版面開關 ==== */\n'
+        return base + header + extra + '\n'
     return build_css()
 
 
@@ -650,6 +682,9 @@ def text_fields() -> list:
         "composer_placeholder": "輸入框提示文字",
         "submit_text": "送出按鈕文字",
         "disclaimer": "底部免責聲明",
+        "faq_picker_title": "分類問題清單：標題",
+        "faq_picker_more": "分類問題清單：題數說明（可用 {總數}、{題數}）",
+        "faq_picker_hint": "分類問題清單：底部提示",
         "answer_ai_label": "回答標籤：AI 整理的回答",
         "answer_faq_label": "回答標籤：直接引用 FAQ 原文",
         "ticket_badge": "詢問單視窗小標",
@@ -697,6 +732,7 @@ def text_fields() -> list:
                  "section_label", "section_hint", "sidebar_note"],
         "對話區": ["welcome_title", "welcome_text", "newchat_welcome_text",
                    "composer_placeholder", "submit_text", "disclaimer",
+                   "faq_picker_title", "faq_picker_more", "faq_picker_hint",
                    "answer_ai_label", "answer_faq_label"],
         "詢問單視窗": ["ticket_badge", "ticket_title", "ticket_intro", "ticket_subject_label",
                      "ticket_desc_label", "ticket_name_label", "ticket_contact_label",

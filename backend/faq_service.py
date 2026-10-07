@@ -17,13 +17,14 @@ from .qdrant_service import delete_faqs, recreate_collection, upsert_faqs
 CSV_PATH = PROJECT_ROOT / "data" / "faq.csv"
 BACKUP_DIR = PROJECT_ROOT / "data" / "faq-backups"
 BACKUP_KEEP = 20
-FIELDS = ["id", "category", "question", "answer", "url", "keywords", "office", "email"]
+FIELDS = ["id", "category", "question", "answer", "url", "keywords", "office", "email", "owner"]
 # 系統自動記錄的欄位：新增、匯入或編輯時寫入，不開放從試算表匯入或手動修改。
 META_FIELDS = ["updated_at", "update_note"]
 STORE_FIELDS = FIELDS + META_FIELDS
 FIELD_LABELS = {"id": "問題編號", "category": "分類", "question": "問題", "answer": "建議答案",
-                "url": "依據／來源連結", "keywords": "關鍵字", "office": "主責單位", "email": "信箱"}
-SHORT_FIELDS = ("id", "category", "office", "email")  # 更新紀錄會附上前後值的短欄位
+                "url": "依據／來源連結", "keywords": "關鍵字", "office": "主責單位", "email": "信箱",
+                "owner": "負責填寫人"}
+SHORT_FIELDS = ("id", "category", "office", "email", "owner")  # 更新紀錄會附上前後值的短欄位
 TAIPEI = timezone(timedelta(hours=8))
 MAX_ROWS = 5000
 # 只有這些格式才當成既有題號；試算表「問題編號」欄常被填成「新增」「有更新內文」等備註，
@@ -45,6 +46,8 @@ HEADER_ALIASES = {
     "單位": "office", "權責單位": "office",
     "email": "email", "信箱": "email", "電子信箱": "email", "聯絡信箱": "email", "承辦信箱": "email",
     "e-mail": "email", "mail": "email",
+    "owner": "owner", "負責填寫人": "owner", "填寫人": "owner", "負責人": "owner", "承辦人": "owner",
+    "維護人": "owner", "提供人": "owner", "填表人": "owner",
 }
 _ENCODINGS = ("utf-8-sig", "utf-8", "cp950", "big5")
 
@@ -516,7 +519,7 @@ def export_csv() -> str:
 def template_csv() -> str:
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["問題編號", "分類", "問題", "建議答案", "依據／來源連結", "主責單位", "信箱"])
+    writer.writerow(["問題編號", "分類", "問題", "建議答案", "依據／來源連結", "主責單位", "信箱", "負責填寫人"])
     writer.writerow(["1", "選課相關", "如何加退選課程？", "請登入選課系統辦理加退選。",
-                     "https://example.edu.tw/course", "教務處", "example@mail.shu.edu.tw"])
+                     "https://example.edu.tw/course", "教務處", "example@mail.shu.edu.tw", "王小明"])
     return "﻿" + output.getvalue()
