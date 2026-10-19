@@ -130,3 +130,4 @@ body.office-mode .admin-only{display:none!important}
 .my-office small{color:#6d6761;font-size:13px}
 .transfer-bar{position:sticky;top:8px;z-index:5;box-shadow:0 4px 14px rgba(0,0,0,.08)}
 #rows td:nth-child(5){min-width:140px}
+.my-office[hidden],.transfer-bar[hidden]{display:none}
