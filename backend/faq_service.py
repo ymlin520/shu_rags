@@ -205,8 +205,8 @@ def list_faqs() -> list[dict[str, str]]:
     return read_rows()
 
 
-def summary() -> dict[str, Any]:
-    rows = read_rows()
+def summary(rows: list[dict[str, str]] | None = None) -> dict[str, Any]:
+    rows = read_rows() if rows is None else rows
     categories: dict[str, int] = {}
     offices: dict[str, int] = {}
     for row in rows:
@@ -225,8 +225,8 @@ def summary() -> dict[str, Any]:
     }
 
 
-def save_faq(record: dict[str, Any], original_id: str = "") -> dict[str, str]:
-    """新增或更新單筆 FAQ，CSV 與向量庫一起更新。"""
+def save_faq(record: dict[str, Any], original_id: str = "", editor: str = "後台") -> dict[str, str]:
+    """新增或更新單筆 FAQ，CSV 與向量庫一起更新；editor 會寫進更新內容（例如「處室後台（總務處）」）。"""
     rows = read_rows()
     used = {row["id"] for row in rows}
     row = {field: _clean(record.get(field)) for field in FIELDS}
@@ -241,9 +241,9 @@ def save_faq(record: dict[str, Any], original_id: str = "") -> dict[str, str]:
     target = original_id or row["id"]
     old = next((existing for existing in rows if existing["id"] == target), None)
     if old is None:
-        row.update(updated_at=now(), update_note="後台新增")
+        row.update(updated_at=now(), update_note=f"{editor}新增")
     elif parts := changed_fields(old, row):
-        row.update(updated_at=now(), update_note="後台編輯：" + "、".join(parts))
+        row.update(updated_at=now(), update_note=f"{editor}編輯：" + "、".join(parts))
     else:
         row.update(updated_at=old["updated_at"], update_note=old["update_note"])
     for index, existing in enumerate(rows):
@@ -257,6 +257,39 @@ def save_faq(record: dict[str, Any], original_id: str = "") -> dict[str, str]:
     if original_id and original_id != row["id"]:
         delete_faqs([original_id])
     return row
+
+
+def transfer_faqs(ids: list[str], office: str, editor: str = "後台",
+                  allowed: Any = None) -> list[dict[str, str]]:
+    """把多筆 FAQ 的主責單位改成 office；allowed 是可轉出的單位清單（None 代表不限）。
+
+    信箱清空（舊單位的信箱不該跟著過去）；關鍵字若是系統自動產生的，也一併換成新單位。
+    """
+    office = _clean(office)
+    wanted = {_clean(x) for x in ids if _clean(x)}
+    if not office or not wanted:
+        raise ValueError("請選擇要轉移的題目與目標單位")
+    rows = read_rows()
+    missing = wanted - {row["id"] for row in rows}
+    if missing:
+        raise KeyError("找不到問題編號 " + "、".join(sorted(missing)))
+    picked = [row for row in rows if row["id"] in wanted]
+    if allowed is not None and (foreign := [row["id"] for row in picked if row["office"] not in allowed]):
+        raise PermissionError("這些題目不屬於您的單位，無法轉移：" + "、".join(foreign))
+    changed = []
+    for row in picked:
+        before = row["office"]
+        if before == office:
+            continue
+        if row["keywords"] == " ".join(part for part in (row["category"], before) if part):
+            row["keywords"] = " ".join(part for part in (row["category"], office) if part)
+        row.update(office=office, email="", updated_at=now(),
+                   update_note=f"{editor}轉移：主責單位（{before or '空白'} → {office}）")
+        changed.append(row)
+    if changed:
+        write_rows(rows)
+        sync_vectors(changed)
+    return changed
 
 
 def delete_faq(faq_id: str) -> dict[str, str]:

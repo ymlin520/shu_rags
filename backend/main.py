@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 from fastapi import BackgroundTasks, Body, FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from urllib.parse import unquote
 
 from .config import COLLECTION_NAME, DIRECT_ANSWER_SCORE, PROJECT_ROOT
 from .embedding import embed_text
@@ -22,11 +23,11 @@ from .department_service import DEFAULTS as DEPARTMENT_DEFAULTS
 from .knowledge_service import faq_categories, sync_resolved_ticket
 from . import faq_service
 from .analytics import add_ticket_reply, create_ticket, delete_ticket, department_stats, set_ticket_settled, settle_stats, list_tickets, record_ack_email, log_feedback, log_query, public_ticket, rate_ticket, record_knowledge_sync, record_student_email, record_ticket_email, stats, ticket_detail, update_ticket
-from .routing_rules import DEPARTMENT_FALLBACK_OFFICE
+from .routing_rules import DEPARTMENT_FALLBACK_OFFICE, normalize_office, score_offices
 from .mail_service import (department_recipient, mail_status, save_office_emails, save_password, save_settings,
                            send_ticket_ack_email,
                            send_student_resolution_email, send_test_email, send_ticket_email)
-from .models import (AnswerResponse, FaqImportRequest, FaqUpsertRequest, FeedbackRequest, FeedbackResponse,
+from .models import (AnswerResponse, FaqImportRequest, FaqTransferRequest, FaqUpsertRequest, FeedbackRequest, FeedbackResponse,
                      MailSettingsRequest, MailTestRequest, OfficeMailRequest, SearchRequest, SearchResponse,
                      TicketSettleRequest,
                      TicketCreateRequest, TicketRateRequest, TicketReplyRequest, TicketUpdateRequest)
@@ -678,43 +679,151 @@ def admin_stats(days: int = 7, x_admin_token: str = Header(default="")):
 
 # ---------------------------------------------------------------- 常見問題（FAQ）後台
 
+def official_offices() -> list[str]:
+    """正式處室名稱＝有專屬登入碼的單位，FAQ 只能轉移給這些單位。"""
+    path = PROJECT_ROOT / "office-tokens.json"
+    try:
+        return sorted(json.loads(path.read_text(encoding="utf-8-sig")))
+    except (OSError, ValueError):
+        return []
+
+
+def faq_editor_token() -> str:
+    """各處室共用的常見問題編輯密碼（faq-editor-token.txt）；檔案不存在就代表不開放共用登入。"""
+    try:
+        return (PROJECT_ROOT / "faq-editor-token.txt").read_text(encoding="utf-8-sig").strip()
+    except OSError:
+        return ""
+
+
+def require_faq_access(admin_token: str, office_token: str,
+                       editor_office: str = "") -> tuple[list[str] | None, str, str, str]:
+    """常見問題後台的登入，回傳 (可管理的單位清單，None 代表全部, 主要單位, 寫進更新內容的編輯者名稱, 角色)。
+
+    - 管理密碼（admin）：全部功能。
+    - 共用編輯密碼（editor）：各處室共用，可以編輯、轉移所有題目，但不能匯入或重建向量；
+      登入後自選的「我的單位」由 X-Editor-Office 帶來，只用來記錄是誰改的。
+    - 處室登入碼（office）：只看得到、改得到自己單位的題目。
+    """
+    if admin_token:
+        shared = faq_editor_token()
+        if shared and admin_token == shared:
+            office = unquote(editor_office or "").strip()
+            office = office if office in official_offices() else ""
+            return None, office, f"共用編輯（{office}）" if office else "共用編輯", "editor"
+        require_admin(admin_token)
+        return None, "", "後台", "admin"
+    if not office_token:
+        raise HTTPException(status_code=401, detail="請輸入管理密碼或處室登入碼")
+    if department_by_token(office_token):
+        raise HTTPException(status_code=403, detail="系所登入碼無法管理常見問題，請改用處室登入碼")
+    office, _, offices = require_office_scope(office_token)
+    return offices or [office], office, f"處室後台（{office}）", "office"
+
+
+def suggest_office(row: dict, offices: list[str]) -> str:
+    """主責單位不是正式名稱時（例如舊資料只寫「教務處」），依題目內容建議該轉給哪個窗口。"""
+    if row.get("office") in offices:
+        return ""
+    exact = normalize_office(row.get("office", ""), offices)
+    if exact:
+        return exact
+    scored = [name for name, _ in score_offices(" ".join((row.get("category", ""), row.get("question", ""),
+                                                          row.get("office", "")))) if name in offices]
+    return scored[0] if scored else ""
+
+
+def _own_faq(faq_id: str, scope: list[str] | None) -> dict:
+    row = next((x for x in faq_service.list_faqs() if x["id"] == faq_id), None)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"找不到問題編號 {faq_id}")
+    if scope is not None and row["office"] not in scope:
+        raise HTTPException(status_code=403, detail="這題不屬於您的單位，無法修改")
+    return row
+
+
 @app.get("/api/admin/faqs")
-def faqs_list(x_admin_token: str = Header(default="")):
-    require_admin(x_admin_token)
-    return {"faqs": faq_service.list_faqs(), "summary": faq_service.summary(), "fields": faq_service.FIELDS}
+def faqs_list(x_admin_token: str = Header(default=""), x_office_token: str = Header(default=""),
+              x_editor_office: str = Header(default="")):
+    scope, office, _, role = require_faq_access(x_admin_token, x_office_token, x_editor_office)
+    offices = official_offices()
+    rows = faq_service.list_faqs()
+    if scope is None:
+        rows = [{**row, "suggest": suggest_office(row, offices)} for row in rows]
+    else:
+        rows = [row for row in rows if row["office"] in scope]
+    return {"faqs": rows, "summary": faq_service.summary(rows), "fields": faq_service.FIELDS,
+            "scope": {"role": role, "office": office,
+                      "offices": scope or [], "all_offices": offices}}
 
 
 @app.post("/api/admin/faqs", status_code=201)
-def faq_create(request: FaqUpsertRequest, x_admin_token: str = Header(default="")):
-    require_admin(x_admin_token)
+def faq_create(request: FaqUpsertRequest, x_admin_token: str = Header(default=""),
+               x_office_token: str = Header(default=""), x_editor_office: str = Header(default="")):
+    scope, office, editor, _ = require_faq_access(x_admin_token, x_office_token, x_editor_office)
+    record = request.model_dump()
+    if scope is not None:
+        record["office"] = record["office"] or office
+        if record["office"] not in scope:
+            raise HTTPException(status_code=403, detail="只能新增本單位的題目；要交給其他單位，請先新增再用「轉移」")
     try:
-        faq = faq_service.save_faq(request.model_dump())
+        faq = faq_service.save_faq(record, editor=editor)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    logger.info("FAQ 新增 id=%s", faq["id"])
+    logger.info("FAQ 新增 id=%s by=%s", faq["id"], editor)
     return {"faq": faq}
 
 
 @app.put("/api/admin/faqs/{faq_id}")
-def faq_update(faq_id: str, request: FaqUpsertRequest, x_admin_token: str = Header(default="")):
-    require_admin(x_admin_token)
+def faq_update(faq_id: str, request: FaqUpsertRequest, x_admin_token: str = Header(default=""),
+               x_office_token: str = Header(default=""), x_editor_office: str = Header(default="")):
+    scope, _, editor, _ = require_faq_access(x_admin_token, x_office_token, x_editor_office)
+    record = request.model_dump()
+    if scope is not None:
+        _own_faq(faq_id, scope)
+        # 處室在編輯畫面把主責單位改成別的正式單位，就等於轉移；不能改成自創的名稱
+        if record["office"] not in scope and record["office"] not in official_offices():
+            raise HTTPException(status_code=400, detail="主責單位請從清單選擇正式單位名稱")
     try:
-        faq = faq_service.save_faq(request.model_dump(), original_id=faq_id)
+        faq = faq_service.save_faq(record, original_id=faq_id, editor=editor)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    logger.info("FAQ 更新 id=%s", faq["id"])
+    logger.info("FAQ 更新 id=%s by=%s", faq["id"], editor)
     return {"faq": faq}
 
 
+@app.post("/api/admin/faqs/transfer")
+def faq_transfer(request: FaqTransferRequest, x_admin_token: str = Header(default=""),
+                 x_office_token: str = Header(default=""), x_editor_office: str = Header(default="")):
+    """把勾選的題目整批交給另一個單位（改主責單位），處室只能轉出自己單位的題目。"""
+    scope, _, editor, _ = require_faq_access(x_admin_token, x_office_token, x_editor_office)
+    if request.office not in official_offices():
+        raise HTTPException(status_code=400, detail="請從清單選擇要轉移到的正式單位")
+    try:
+        backup = faq_service.backup_csv()
+        changed = faq_service.transfer_faqs(request.ids, request.office, editor=editor, allowed=scope)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc).strip("'\"")) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    logger.info("FAQ 轉移 %d 筆 → %s by=%s", len(changed), request.office, editor)
+    return {"moved": len(changed), "office": request.office, "backup": backup}
+
+
 @app.delete("/api/admin/faqs/{faq_id}")
-def faq_delete(faq_id: str, x_admin_token: str = Header(default="")):
-    require_admin(x_admin_token)
+def faq_delete(faq_id: str, x_admin_token: str = Header(default=""), x_office_token: str = Header(default=""),
+               x_editor_office: str = Header(default="")):
+    scope, _, editor, _ = require_faq_access(x_admin_token, x_office_token, x_editor_office)
+    if scope is not None:
+        _own_faq(faq_id, scope)
     try:
         faq_service.backup_csv()
         result = faq_service.delete_faq(faq_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    logger.info("FAQ 刪除 id=%s", faq_id)
+    logger.info("FAQ 刪除 id=%s by=%s", faq_id, editor)
     return result
 
 

@@ -1,14 +1,16 @@
-<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>常見問題管理・校務問答</title><link rel="stylesheet" href="/static/admin.css?v=20260911b"><link rel="stylesheet" href="/static/faq-admin.css?v=20261005-owner"></head><body><main>
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>常見問題管理・校務問答</title><link rel="stylesheet" href="/static/admin.css?v=20260911b"><link rel="stylesheet" href="/static/faq-admin.css?v=20261019-office2"></head><body><main>
 
-<header><div><small>校務問答</small><h1>常見問題管理</h1><p>匯入試算表、逐筆編輯 FAQ；存檔後前台分類與 AI 回答會立即使用新資料。</p></div><div class="header-actions"><a href="/admin">詢問單後台</a><a href="/" target="_blank" rel="noopener">前台問答 ↗</a><button id="export">匯出 CSV</button><button id="logout" hidden>登出</button></div></header>
+<header><div><small>校務問答</small><h1>常見問題管理</h1><p id="intro">匯入試算表、逐筆編輯 FAQ；存檔後前台分類與 AI 回答會立即使用新資料。</p></div><div class="header-actions"><a href="/admin" id="back-link">詢問單後台</a><a href="/" target="_blank" rel="noopener">前台問答 ↗</a><button id="export" class="admin-only">匯出 CSV</button><button id="logout" hidden>登出</button></div></header>
 
-<section id="login" class="login"><h2>管理者登入</h2><p>使用與詢問單後台相同的管理密碼。</p><form id="login-form"><input id="token" type="password" placeholder="管理密碼" autocomplete="current-password" required><button>登入</button></form><p id="login-error"></p></section>
+<section id="login" class="login"><h2>登入</h2><p>各處室請輸入「常見問題共用編輯密碼」；管理者請輸入管理密碼。</p><form id="login-form"><input id="token" type="password" placeholder="共用編輯密碼" autocomplete="current-password" required><button>登入</button></form><p id="login-error"></p></section>
 
 <div id="app" hidden>
 
 <section class="stats" id="stats"></section>
 
-<section class="panel">
+<div id="my-office-box" class="my-office" hidden><label>我的單位<select id="my-office"></select></label><small>選好後會直接顯示貴單位的題目，修改紀錄也會記下這個單位；要看其他單位，用下方「依主責單位瀏覽」切換。</small></div>
+
+<section class="panel admin-only" id="import-panel">
 <div class="section-title"><h2>匯入常見問題</h2><small>Google 試算表、CSV／Excel 檔，或直接貼上</small></div>
 <div class="tabs"><button class="tab active" type="button" data-source="url">Google 試算表網址</button><button class="tab" type="button" data-source="file">上傳檔案</button><button class="tab" type="button" data-source="text">直接貼上</button></div>
 
@@ -44,8 +46,9 @@
 <section class="panel">
 <div class="section-title"><h2 id="list-title">所有常見問題</h2><span id="count"></span></div>
 <div id="scope-bar" class="scope-bar" hidden><span>目前檢視：<b id="scope-name"></b></span><button id="scope-clear" type="button">← 回到全部單位</button></div>
-<div class="list-toolbar"><input id="search" type="search" placeholder="搜尋編號、問題、答案或單位"><select id="category-filter"><option value="">所有分類</option></select><select id="office-filter"><option value="">所有主責單位</option></select><select id="sort" title="排序方式"><option value="recent">排序：最近更新在前</option><option value="oldest">排序：最早更新在前</option><option value="id">排序：編號由小到大</option><option value="idDesc">排序：編號由大到小</option><option value="category">排序：依分類</option><option value="office">排序：依主責單位</option></select><button id="add" class="save" type="button">＋ 新增一筆</button><button id="reindex" type="button">重建向量</button></div>
-<div class="table-wrap"><table><thead><tr><th>編號</th><th>分類</th><th>問題／建議答案</th><th>主責單位</th><th>負責填寫人</th><th>更新時間</th><th>更新內容</th><th>來源</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>
+<div class="list-toolbar"><input id="search" type="search" placeholder="搜尋編號、問題、答案或單位"><select id="category-filter"><option value="">所有分類</option></select><select id="office-filter"><option value="">所有主責單位</option></select><select id="sort" title="排序方式"><option value="recent">排序：最近更新在前</option><option value="oldest">排序：最早更新在前</option><option value="id">排序：編號由小到大</option><option value="idDesc">排序：編號由大到小</option><option value="category">排序：依分類</option><option value="office">排序：依主責單位</option></select><button id="add" class="save" type="button">＋ 新增一筆</button><button id="reindex" class="admin-only" type="button">重建向量</button></div>
+<div id="transfer-bar" class="transfer-bar" hidden><span>已勾選 <b id="picked-count">0</b> 題</span><label>轉移給<select id="transfer-to"><option value="">選擇單位…</option></select></label><button id="transfer" class="save" type="button">轉移</button><button id="apply-suggest" type="button" title="依題目內容建議的正式單位，逐題轉移">依建議單位轉移</button><button id="pick-clear" type="button">取消勾選</button><span id="transfer-msg"></span></div>
+<div class="table-wrap"><table><thead><tr><th class="pick"><input type="checkbox" id="pick-page" title="勾選本頁全部"></th><th>編號</th><th>分類</th><th>問題／建議答案</th><th>主責單位</th><th>負責填寫人</th><th>更新時間</th><th>更新內容</th><th>來源</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>
 <div class="pager"><button id="prev" type="button">← 上一頁</button><span id="page-info"></span><button id="next" type="button">下一頁 →</button></div>
 </section>
 
@@ -63,4 +66,4 @@
 </form></dialog>
 
 <datalist id="category-list"></datalist><datalist id="office-list"></datalist><datalist id="owner-list"></datalist>
-<script src="/static/faq-admin.js?v=20261005-owner"></script></body></html>
+<script src="/static/faq-admin.js?v=20261019-office2"></script></body></html>

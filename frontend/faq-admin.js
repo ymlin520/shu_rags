@@ -1,5 +1,6 @@
 const $ = s => document.querySelector(s);
 const ADMIN_TOKEN_KEY = 'school-faq-admin-token';
+const OFFICE_TOKEN_KEY = 'school-faq-office-token';   // 與處室回覆清單共用，登入一次兩邊都能用
 const PAGE_SIZE = 50;
 const FIELDS = ['id', 'category', 'question', 'answer', 'url', 'keywords', 'office', 'email', 'owner'];
 const SEARCH_FIELDS = [...FIELDS, 'updated_at', 'update_note'];
@@ -13,11 +14,23 @@ const SORTS = {
   category: (a, b) => text(a.category).localeCompare(text(b.category), 'zh-Hant') || byId(a, b),
   office: (a, b) => text(a.office).localeCompare(text(b.office), 'zh-Hant') || byId(a, b),
 };
-let token = localStorage.getItem(ADMIN_TOKEN_KEY) || '';
-let faqs = [], summary = {}, preview = null, source = 'url', page = 1, editingId = null;
+const MY_OFFICE_KEY = 'school-faq-editor-office';
+// role：admin 管理密碼（全部功能）；editor 各處室共用的編輯密碼（可改、可轉移所有題目，不能匯入）；
+//       office 處室專屬登入碼（只看得到本單位）。admin 與 editor 都放在 X-Admin-Token，由後端分辨。
+let role = localStorage.getItem(ADMIN_TOKEN_KEY) ? 'admin' : 'office';
+let myOffice = '';
+try { myOffice = localStorage.getItem(MY_OFFICE_KEY) || '' } catch { }
+let token = localStorage.getItem(role === 'admin' ? ADMIN_TOKEN_KEY : OFFICE_TOKEN_KEY) || '';
+let faqs = [], summary = {}, scope = { offices: [], all_offices: [] }, preview = null, source = 'url', page = 1, editingId = null;
+const picked = new Set();
+const tokenKey = () => role === 'admin' ? ADMIN_TOKEN_KEY : OFFICE_TOKEN_KEY;
+const isOffice = () => role === 'office';
+const canImport = () => role === 'admin';
+const official = name => scope.all_offices.includes(name);
 
 const esc = v => { const n = document.createElement('div'); n.textContent = v ?? ''; return n.innerHTML };
-const headers = () => ({ 'X-Admin-Token': token });
+const headers = () => (role === 'office' ? { 'X-Office-Token': token }
+  : { 'X-Admin-Token': token, ...(myOffice ? { 'X-Editor-Office': encodeURIComponent(myOffice) } : {}) });
 const jsonHeaders = () => ({ ...headers(), 'Content-Type': 'application/json' });
 const msg = (el, text, ok) => { const n = $(el); n.textContent = text; n.className = text ? (ok ? 'ok' : 'err') : '' };
 const cut = (v, n) => { const t = String(v || '').replace(/\s+/g, ' '); return t.length > n ? t.slice(0, n) + '…' : t };
@@ -27,10 +40,36 @@ async function detail(response) { const d = await response.json().catch(() => ({
 
 async function load() {
   const response = await fetch('/api/admin/faqs', { headers: headers() });
-  if (!response.ok) throw new Error(response.status === 401 ? '管理密碼不正確' : await detail(response));
+  if (!response.ok) { const e = new Error(await detail(response)); e.status = response.status; throw e }
   const data = await response.json();
   faqs = data.faqs; summary = data.summary;
-  renderSummary(); renderFilters(); renderOfficeBoard(); renderList();
+  // 舊版後端沒有 scope：當成管理者，正式單位清單先用現有主責單位代替（後端重啟後就會是正式清單）
+  scope = data.scope || { role: 'admin', office: '', offices: [], all_offices: summary.offices.map(x => x.name) };
+  if (role !== 'office') role = scope.role;   // 管理密碼或共用密碼，由後端回報
+  for (const id of [...picked]) if (!faqs.some(x => x.id === id)) picked.delete(id);
+  renderRole(); renderSummary(); renderFilters(); renderOfficeBoard(); renderList();
+}
+
+function renderRole() {
+  document.body.classList.toggle('office-mode', !canImport());
+  $('#my-office-box').hidden = role !== 'editor';
+  if (role === 'editor') {
+    $('#my-office').innerHTML = '<option value="">請選擇…</option>' + scope.all_offices.map(v => `<option>${esc(v)}</option>`).join('');
+    $('#my-office').value = scope.all_offices.includes(myOffice) ? myOffice : '';
+  }
+  $('#intro').innerHTML = isOffice()
+    ? `<span class="who">目前登入：${esc(scope.office)}</span><br>只看得到、改得到本單位的常見問題；不屬於本單位的題目可以勾選後「轉移」給正確的單位。`
+    : role === 'editor'
+      ? '各處室共用的編輯帳號：可以修改所有常見問題，也可以把不屬於自己的題目勾選後「轉移」給正確的單位。修改紀錄會記下您選的單位。'
+      : '匯入試算表、逐筆編輯 FAQ；存檔後前台分類與 AI 回答會立即使用新資料。';
+  $('#back-link').hidden = role === 'editor';
+  $('#back-link').href = isOffice() ? '/office' : '/admin';
+  $('#back-link').textContent = isOffice() ? '處室回覆清單' : '詢問單後台';
+  const mine = new Set(scope.offices);
+  const targets = scope.all_offices.filter(x => !(isOffice() && mine.size === 1 && mine.has(x)));
+  const current = $('#transfer-to').value;
+  $('#transfer-to').innerHTML = '<option value="">選擇單位…</option>' + targets.map(v => `<option>${esc(v)}</option>`).join('');
+  $('#transfer-to').value = targets.includes(current) ? current : '';
 }
 
 function renderSummary() {
@@ -53,7 +92,9 @@ function renderFilters() {
   fillOptions($('#office-filter'), offices, true);
   if (faqs.some(x => !officeOf(x))) $('#office-filter').insertAdjacentHTML('beforeend', `<option value="${NO_OFFICE}">未填主責單位</option>`);
   $('#category-list').innerHTML = categories.map(v => `<option value="${esc(v)}">`).join('');
-  $('#office-list').innerHTML = offices.map(v => `<option value="${esc(v)}">`).join('');
+  // 主責單位一律從正式單位挑；舊資料裡的非正式名稱只有管理者看得到，並標成「待轉移」
+  $('#office-list').innerHTML = scope.all_offices.map(v => `<option value="${esc(v)}">`).join('');
+  if (!isOffice() && faqs.some(isLegacy)) $('#office-filter').insertAdjacentHTML('beforeend', `<option value="${LEGACY}">待轉移（非正式單位名稱）</option>`);
   const owners = [...new Set(faqs.map(x => (x.owner || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'zh-Hant'));
   $('#owner-list').innerHTML = owners.map(v => `<option value="${esc(v)}">`).join('');
 }
@@ -61,8 +102,10 @@ function renderFilters() {
 /* ----------------------------------------------------------------- FAQ 清單 */
 
 const NO_OFFICE = '__none__';   // 「未填主責單位」的篩選值
+const LEGACY = '__legacy__';    // 「主責單位不是正式單位名稱」的篩選值（例如舊資料只寫「教務處」）
 const officeOf = x => x.office || '';
-const matchOffice = (x, office) => !office || (office === NO_OFFICE ? !officeOf(x) : officeOf(x) === office);
+const isLegacy = x => !!officeOf(x) && !official(officeOf(x));
+const matchOffice = (x, office) => !office || (office === NO_OFFICE ? !officeOf(x) : office === LEGACY ? isLegacy(x) : officeOf(x) === office);
 
 function filtered() {
   const keyword = $('#search').value.trim().toLowerCase();
@@ -101,8 +144,10 @@ function renderOfficeBoard() {
     `<button type="button" class="office-chip${current === value ? ' active' : ''}" data-office="${esc(value)}">` +
     `<span>${esc(label)}</span><em>${total}</em></button>`;
 
-  let html = `<div class="office-grid office-top">${chip('', '全部單位', faqs.length)}` +
-    (counts.get(NO_OFFICE) ? chip(NO_OFFICE, '未填主責單位', counts.get(NO_OFFICE)) : '') + '</div>';
+  const legacy = faqs.filter(isLegacy).length;
+  let html = `<div class="office-grid office-top">${chip('', isOffice() ? '本單位全部' : '全部單位', faqs.length)}` +
+    (counts.get(NO_OFFICE) ? chip(NO_OFFICE, '未填主責單位', counts.get(NO_OFFICE)) : '') +
+    (legacy && !isOffice() ? chip(LEGACY, '待轉移（非正式單位名稱）', legacy) : '') + '</div>';
   for (const [group, list] of groups) {
     const total = list.reduce((sum, n) => sum + (counts.get(n) || 0), 0);
     const label = n => (group === '其他單位' || n === group) ? n : n.replace(/^.*?-/, '') || n;
@@ -111,11 +156,11 @@ function renderOfficeBoard() {
   }
   $('#office-groups').innerHTML = html;
 
-  const name = current === NO_OFFICE ? '未填主責單位' : current;
+  const name = current === NO_OFFICE ? '未填主責單位' : current === LEGACY ? '待轉移（非正式單位名稱）' : current;
   $('#scope-bar').hidden = !current;
   $('#scope-name').textContent = name || '';
   $('#list-title').textContent = current ? `${name} 的常見問題` : '所有常見問題';
-  $('#add').textContent = current && current !== NO_OFFICE ? `＋ 在${name}新增一筆` : '＋ 新增一筆';
+  $('#add').textContent = current && current !== NO_OFFICE && current !== LEGACY ? `＋ 在${name}新增一筆` : '＋ 新增一筆';
 }
 
 function pickOffice(value) {
@@ -130,13 +175,15 @@ function renderList() {
   page = Math.min(Math.max(1, page), pages);
   const slice = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   $('#count').textContent = rows.length === faqs.length ? `共 ${faqs.length} 筆` : `符合 ${rows.length} 筆／共 ${faqs.length} 筆`;
-  $('#rows').innerHTML = slice.length ? slice.map(x => `<tr><td class="id">${esc(x.id)}</td><td>${esc(x.category) || '<span class="muted">未分類</span>'}</td>
-<td><span class="q">${esc(x.question)}</span><small class="a">${esc(cut(x.answer, 90))}</small></td><td>${esc(x.office) || '—'}</td><td>${esc(x.owner) || '—'}</td>
+  $('#rows').innerHTML = slice.length ? slice.map(x => `<tr><td class="pick"><input type="checkbox" data-pick="${esc(x.id)}" ${picked.has(x.id) ? 'checked' : ''}></td><td class="id">${esc(x.id)}</td><td>${esc(x.category) || '<span class="muted">未分類</span>'}</td>
+<td><span class="q">${esc(x.question)}</span><small class="a">${esc(cut(x.answer, 90))}</small></td><td><span class="${isLegacy(x) ? 'legacy-office' : ''}">${esc(x.office) || '—'}</span>${x.suggest ? `<small class="suggest">建議：${esc(x.suggest)}</small>` : ''}</td><td>${esc(x.owner) || '—'}</td>
 <td class="when">${esc(x.updated_at) || '—'}</td><td class="note">${esc(x.update_note) || '—'}</td>
 <td>${x.url ? `<a href="${esc(x.url)}" target="_blank" rel="noopener">開啟 ↗</a>` : '—'}</td>
 <td><button class="edit" data-edit="${esc(x.id)}" type="button">編輯 →</button></td></tr>`).join('')
-    : '<tr><td colspan="9">沒有符合條件的常見問題</td></tr>';
+    : '<tr><td colspan="10">沒有符合條件的常見問題</td></tr>';
+  $('#pick-page').checked = slice.length > 0 && slice.every(x => picked.has(x.id));
   $('#page-info').textContent = `第 ${page} / ${pages} 頁`;
+  renderTransferBar();
   $('#prev').disabled = page <= 1; $('#next').disabled = page >= pages;
 }
 
@@ -238,6 +285,51 @@ function renderReport(result, plan) {
   $('#report').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+/* ----------------------------------------------------------------- 轉移給其他單位 */
+
+function renderTransferBar() {
+  $('#transfer-bar').hidden = !picked.size;
+  $('#picked-count').textContent = picked.size;
+  $('#apply-suggest').hidden = isOffice() || ![...picked].some(id => faqs.find(x => x.id === id)?.suggest);
+}
+
+async function transfer(ids, office) {
+  const response = await fetch('/api/admin/faqs/transfer', { method: 'POST', headers: jsonHeaders(), body: JSON.stringify({ ids, office }) });
+  if (!response.ok) throw new Error(await detail(response));
+  return (await response.json()).moved;
+}
+
+async function transferPicked() {
+  const office = $('#transfer-to').value, ids = [...picked];
+  if (!office) return msg('#transfer-msg', '請先選擇要轉移到哪個單位。', false);
+  const leaving = isOffice() && !scope.offices.includes(office);
+  if (!confirm(`確定把勾選的 ${ids.length} 題轉移給「${office}」？` + (leaving ? '\n轉移後這些題目會由對方單位維護，您將無法再看到或修改。' : ''))) return;
+  await runTransfer(async () => transfer(ids, office), `已轉移給「${office}」`);
+}
+
+async function applySuggestions() {
+  const groups = new Map();
+  [...picked].map(id => faqs.find(x => x.id === id)).filter(x => x && x.suggest)
+    .forEach(x => { if (!groups.has(x.suggest)) groups.set(x.suggest, []); groups.get(x.suggest).push(x.id) });
+  const total = [...groups.values()].reduce((sum, ids) => sum + ids.length, 0);
+  const lines = [...groups].map(([office, ids]) => `・${office}：${ids.length} 題`).join('\n');
+  if (!confirm(`依建議單位轉移 ${total} 題（沒有建議的題目不會動）：\n${lines}\n\n建議是依題目關鍵字推測，轉移前請先確認。`)) return;
+  await runTransfer(async () => { let moved = 0; for (const [office, ids] of groups) moved += await transfer(ids, office); return moved }, '已依建議單位轉移');
+}
+
+async function runTransfer(job, done) {
+  const buttons = ['#transfer', '#apply-suggest'].map(s => $(s));
+  buttons.forEach(b => { b.disabled = true });
+  msg('#transfer-msg', '轉移中，正在更新向量…', true);
+  try {
+    const moved = await job();
+    picked.clear();
+    await load();
+    msg('#transfer-msg', '', true);
+    alert(`${done}，共 ${moved} 題。更新內容會記錄轉移前後的主責單位。`);
+  } catch (error) { msg('#transfer-msg', error.message, false) } finally { buttons.forEach(b => { b.disabled = false }) }
+}
+
 /* ----------------------------------------------------------------- 單筆編輯 */
 
 function openEditor(faq) {
@@ -248,7 +340,8 @@ function openEditor(faq) {
   FIELDS.forEach(field => { $(`#f-${field}`).value = value(field) });
   // 新增時若正在看某個單位，先把主責單位填好，省得每次重打
   const scope = $('#office-filter').value;
-  if (!faq && scope && scope !== NO_OFFICE) $('#f-office').value = scope;
+  if (!faq && scope && scope !== NO_OFFICE && scope !== LEGACY) $('#f-office').value = scope;
+  else if (!faq && role === 'editor' && myOffice) $('#f-office').value = myOffice;
   $('#delete').hidden = !faq;
   msg('#edit-msg', '', true);
   $('#editor').showModal();
@@ -260,6 +353,14 @@ async function saveEditor(event) {
   const payload = Object.fromEntries(FIELDS.map(field => [field, $(`#f-${field}`).value.trim()]));
   if (!payload.question || !payload.answer) return msg('#edit-msg', '問題與建議答案不可空白。', false);
   if (!payload.owner) { $('#f-owner').focus(); return msg('#edit-msg', '請填寫負責填寫人的姓名。', false) }
+  if (isOffice()) {
+    if (!payload.office) payload.office = scope.office;
+    if (!official(payload.office)) { $('#f-office').focus(); return msg('#edit-msg', '主責單位請從清單選擇正式單位名稱。', false) }
+    if (!scope.offices.includes(payload.office)) {
+      if (!editingId) return msg('#edit-msg', '只能新增本單位的題目；要交給其他單位，請先存成本單位再用「轉移」。', false);
+      if (!confirm(`主責單位改成「${payload.office}」等於把這題轉移給對方，存檔後您將無法再看到或修改。確定嗎？`)) return;
+    }
+  }
   const button = $('#edit-form .save'); button.disabled = true;
   msg('#edit-msg', '儲存中，正在更新向量…', true);
   try {
@@ -284,8 +385,25 @@ async function removeFaq() {
 
 async function enterAdmin() {
   await load();
-  localStorage.setItem(ADMIN_TOKEN_KEY, token);
+  localStorage.setItem(tokenKey(), token);
+  if (role === 'editor' && myOffice && scope.all_offices.includes(myOffice) && !$('#office-filter').value) pickOffice(myOffice);
   $('#login').hidden = true; $('#app').hidden = false; $('#logout').hidden = false; $('#login-error').textContent = '';
+}
+
+// 共用編輯者選「我的單位」：記住選擇，並直接切到該單位的題目
+function chooseMyOffice(value, jump) {
+  myOffice = value;
+  try { value ? localStorage.setItem(MY_OFFICE_KEY, value) : localStorage.removeItem(MY_OFFICE_KEY) } catch { }
+  if (jump && value) pickOffice(value);
+}
+
+// 同一個輸入框：先當管理密碼／共用密碼試，不對再當處室登入碼試
+async function login(value) {
+  token = value;
+  for (const next of ['admin', 'office']) {
+    role = next;
+    try { return await enterAdmin() } catch (error) { if (error.status !== 401 || next === 'office') throw error }
+  }
 }
 
 async function download(path, filename) {
@@ -299,10 +417,10 @@ async function download(path, filename) {
 }
 
 $('#login-form').onsubmit = async event => {
-  event.preventDefault(); token = $('#token').value;
-  try { await enterAdmin() } catch (error) { localStorage.removeItem(ADMIN_TOKEN_KEY); $('#login-error').textContent = error.message }
+  event.preventDefault();
+  try { await login($('#token').value) } catch (error) { $('#login-error').textContent = error.status === 401 ? '密碼不正確，請確認後再試一次' : error.message }
 };
-$('#logout').onclick = () => { localStorage.removeItem(ADMIN_TOKEN_KEY); token = ''; location.reload() };
+$('#logout').onclick = () => { localStorage.removeItem(tokenKey()); token = ''; location.reload() };
 
 document.querySelectorAll('.tab').forEach(tab => tab.onclick = () => {
   document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x === tab));
@@ -336,6 +454,19 @@ $('#reindex').onclick = async () => {
   alert(response.ok ? `已重建 ${(await response.json()).indexed} 筆向量。` : await detail(response));
 };
 
+$('#rows').onchange = event => {
+  const box = event.target.closest('[data-pick]'); if (!box) return;
+  box.checked ? picked.add(box.dataset.pick) : picked.delete(box.dataset.pick);
+  renderList();
+};
+$('#pick-page').onchange = event => {
+  document.querySelectorAll('#rows [data-pick]').forEach(box => { event.target.checked ? picked.add(box.dataset.pick) : picked.delete(box.dataset.pick) });
+  renderList();
+};
+$('#pick-clear').onclick = () => { picked.clear(); msg('#transfer-msg', '', true); renderList() };
+$('#transfer').onclick = transferPicked;
+$('#my-office').onchange = event => chooseMyOffice(event.target.value, true);
+$('#apply-suggest').onclick = applySuggestions;
 $('#rows').onclick = event => {
   const button = event.target.closest('[data-edit]');
   if (button) openEditor(faqs.find(x => x.id === button.dataset.edit));
@@ -346,8 +477,9 @@ $('#delete').onclick = removeFaq;
 
 $('#category-filter').dataset.all = '所有分類';
 $('#office-filter').dataset.all = '所有主責單位';
-if (token) enterAdmin().catch(() => {
-  localStorage.removeItem(ADMIN_TOKEN_KEY); token = '';
+if (token) enterAdmin().catch(error => {
+  if (error.status === 401) localStorage.removeItem(tokenKey());
+  token = '';
   $('#login').hidden = false; $('#app').hidden = true;
-  $('#login-error').textContent = '已儲存的管理密碼失效，請重新登入。';
+  $('#login-error').textContent = error.status === 401 ? '已儲存的登入資訊失效，請重新登入。' : error.message;
 });

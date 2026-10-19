@@ -121,6 +121,11 @@ class FaqUpsertRequest(BaseModel):
     owner: str = Field(min_length=1, max_length=60)   # 負責填寫人必填
 
 
+class FaqTransferRequest(BaseModel):
+    ids: list[str] = Field(min_length=1, max_length=5000)
+    office: str = Field(min_length=1, max_length=100)
+
+
 class FaqSourceRequest(BaseModel):
     url: str = Field(default="", max_length=1000)
     text: str = Field(default="", max_length=2_000_000)

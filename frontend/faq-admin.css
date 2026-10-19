@@ -110,3 +110,23 @@ tr.flagged{background:#fff8e8}
 /* 必填標記 */
 .edit-grid label .lab{display:flex;align-items:center;gap:6px}
 .edit-grid label .req{font-size:11px;font-weight:700;color:#c2410c;border:1px solid #f0c2a6;border-radius:999px;padding:1px 7px;line-height:1.6}
+
+/* ---- 2026-10-19 處室登入與 FAQ 轉移 ---- */
+body.office-mode .admin-only{display:none!important}
+.who{display:inline-block;margin-top:6px;padding:4px 11px;border-radius:999px;background:#f9ddd3;border:1px solid var(--accent);font-size:13px;font-weight:700}
+#rows td.pick,#rows td.pick input,th.pick input{cursor:pointer}
+.transfer-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 12px;padding:10px 14px;
+  background:#fff8e8;border:1px solid #e7c98a;border-radius:10px;font-size:14px}
+.transfer-bar label{display:flex;align-items:center;gap:6px;margin:0;font-weight:700}
+.transfer-bar select{padding:8px;border:1px solid var(--line);border-radius:8px;font:inherit;max-width:260px}
+.transfer-bar .save{margin:0;width:auto;padding:9px 16px}
+.transfer-bar button:not(.save){border:1px solid #292724;border-radius:8px;background:var(--paper);padding:8px 13px;font:inherit;cursor:pointer}
+#transfer-msg.ok{color:#1d7a4d}#transfer-msg.err{color:#c83d1d}
+.suggest{display:block;margin-top:4px;font-size:12px;color:#9a5b00}
+.legacy-office{color:#9a5b00}
+.my-office{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 6px;padding:12px 16px;background:#f9ddd3;border:1px solid var(--accent);border-radius:12px}
+.my-office label{display:flex;align-items:center;gap:8px;margin:0;font-weight:700}
+.my-office select{padding:9px;border:1px solid var(--line);border-radius:8px;font:inherit;min-width:220px}
+.my-office small{color:#6d6761;font-size:13px}
+.transfer-bar{position:sticky;top:8px;z-index:5;box-shadow:0 4px 14px rgba(0,0,0,.08)}
+#rows td:nth-child(5){min-width:140px}
