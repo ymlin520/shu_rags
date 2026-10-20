@@ -6,6 +6,9 @@ $ErrorActionPreference = 'Continue'
 $root = 'C:\shu_rags'
 Set-Location -LiteralPath $root
 $ollama = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Programs\Ollama\ollama.exe'
+# 模型放在 C:\LLM-Model（qwen2.5:3b 回答、qwen3.5:9b 相關性檢查）。沒指定的話 Ollama 會去讀
+# ~\.ollama\models，找不到模型，AI 回答與相關性過濾都會 404（2026-10-15 ~ 10-20 發生過）。
+$env:OLLAMA_MODELS = 'C:\LLM-Model'
 
 function Write-Watchdog([string]$text) {
   Add-Content -LiteralPath (Join-Path $root 'watchdog.log') -Value ('{0:yyyy-MM-dd HH:mm:ss} {1}' -f (Get-Date), $text)
