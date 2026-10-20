@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from urllib.parse import unquote
 
-from .config import COLLECTION_NAME, DIRECT_ANSWER_SCORE, PROJECT_ROOT
+from .config import COLLECTION_NAME, DIRECT_ANSWER_SCORE, EMBEDDING_MODEL, PROJECT_ROOT
 from .embedding import embed_text
 from .llm_service import (site_text, answer_from_faq, filter_relevant, ollama_status, route_ticket,
                           warm_up_relevance_model)
@@ -31,7 +31,7 @@ from .models import (AnswerResponse, FaqImportRequest, FaqTransferRequest, FaqUp
                      MailSettingsRequest, MailTestRequest, OfficeMailRequest, SearchRequest, SearchResponse,
                      TicketSettleRequest,
                      TicketCreateRequest, TicketRateRequest, TicketReplyRequest, TicketUpdateRequest)
-from .qdrant_service import check_connection, close_client, collection_info, search_faq
+from .qdrant_service import check_connection, close_client, collection_info, collection_ready, search_faq
 from . import theme_service
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -40,8 +40,13 @@ logger = logging.getLogger("vector-faq")
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    logger.info("FAQ API 啟動")
+    logger.info("FAQ API 啟動 embedding=%s collection=%s", EMBEDDING_MODEL, COLLECTION_NAME)
     threading.Thread(target=warm_up_relevance_model, daemon=True).start()
+    if not collection_ready():
+        # 換了向量模型（例如 MiniLM → bge-m3）後第一次啟動：先把整個知識庫建好再開始服務，約一分鐘
+        started = time.perf_counter()
+        indexed = faq_service.reindex()
+        logger.info("向量庫不存在，已重建 %s 筆 duration_s=%.1f", indexed, time.perf_counter() - started)
     try:
         yield
     finally:

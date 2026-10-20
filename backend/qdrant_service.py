@@ -26,6 +26,12 @@ def close_client() -> None:
         _CLIENT = None
 
 
+def collection_ready() -> bool:
+    """目前設定的 collection 存在而且有資料（換向量模型後第一次啟動時會是 False）。"""
+    client = get_client()
+    return client.collection_exists(COLLECTION_NAME) and client.count(COLLECTION_NAME).count > 0
+
+
 def check_connection() -> bool:
     get_client().get_collections()
     return True
